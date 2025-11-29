@@ -2,6 +2,8 @@
 
 JupyterLab + ipyflow で動作する Angular 製フロントエンドアプリケーション
 
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/jupyter-desktop/jupyter-desktop/extension)
+
 ## 📋 プロジェクト概要
 
 このプロジェクトは、JupyterLab と ipyflow を統合したデスクトップアプリケーションです。Three.js を使用した 3D 空間にフローティングウィンドウを配置し、Python コードの実行環境を提供します。
