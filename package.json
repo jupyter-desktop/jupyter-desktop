@@ -15,7 +15,7 @@
     "dev": "concurrently \"npm run serve\" \"npm run backend\"",
     "backend": "cd backend && set ENV=development && python run.py",
     "build": "npm run build:ng && npm run build:backend && npm run build:electron",
-    "build:ng": "npm run preserve && ng build --configuration production",
+    "build:ng": "ng build --configuration production",
     "build:backend": "cd backend && pyinstaller app.spec",
     "build:electron": "cross-env NODE_ENV=production electron-builder",
     "build:clean": "if exist dist rmdir /s /q dist && if exist backend\\dist rmdir /s /q backend\\dist && if exist backend\\build rmdir /s /q backend\\build && if exist dist-electron rmdir /s /q dist-electron",
