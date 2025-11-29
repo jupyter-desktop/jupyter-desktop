@@ -1,0 +1,18 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      ENV: ${ENV:-development}
+      DEBUGPY_ENABLED: ${DEBUGPY_ENABLED:-true}
+      DEBUGPY_WAIT_FOR_CLIENT: ${DEBUGPY_WAIT_FOR_CLIENT:-false}
+    ports:
+      - '8888:8888'
+      - '5678:5678'  # デバッグポート
+    volumes:
+      - ./backend:/backend
+    command: python run.py --host 0.0.0.0 --port 8888 --no-browser --allow-root
+    restart: unless-stopped
+
+

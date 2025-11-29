@@ -1,0 +1,118 @@
+name: Deploy Electron App to GitHub Releases
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-electron:
+    name: Build Electron App
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libfuse2
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r backend/requirements.txt
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Electron app
+        run: npm run build
+
+      - name: Upload Electron artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-${{ matrix.os }}
+          path: dist-electron/*
+          retention-days: 7
+          if-no-files-found: error
+
+  release-electron:
+    name: Create GitHub Release
+    needs: build-electron
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Get version from package.json
+        id: get_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: List downloaded artifacts
+        run: |
+          echo "=== Artifact structure ==="
+          find artifacts -type f -name "*.exe" -o -name "*.blockmap" -o -name "*.AppImage" -o -name "*.deb" | head -20
+          echo ""
+          echo "=== All files ==="
+          find artifacts -type f | head -30
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}-${{ github.run_number }}
+          name: Release v${{ steps.get_version.outputs.version }}-${{ github.run_number }}
+          body: |
+            ## Electron Desktop App Release
+
+            Automated release from commit: ${{ github.sha }}
+
+            ### Assets
+            - Windows installer (NSIS)
+            - Linux build artifacts
+
+            ### Changes
+            ${{ github.event.head_commit.message }}
+          files: |
+            artifacts/electron-ubuntu-latest/**/*.AppImage
+            artifacts/electron-ubuntu-latest/**/*.deb
+            artifacts/electron-windows-latest/**/*.exe
+            artifacts/electron-windows-latest/**/*.blockmap
+          draft: false
+          prerelease: false
+

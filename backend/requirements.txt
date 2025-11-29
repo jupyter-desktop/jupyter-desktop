@@ -1,0 +1,29 @@
+# Jupyter Server とコア依存関係
+jupyter-server>=2.14.2
+jupyter-client>=8.0.0
+jupyter-core>=5.3.0
+ipykernel>=6.25.0
+tornado>=6.0
+
+# ipyflow とその依存関係
+ipyflow>=0.0.217
+# ipyflow の依存関係（ipyflow-core が自動的にインストールされる）
+# 以下のパッケージは ipyflow-core の依存関係として自動的にインストールされます：
+# - ipython
+# - ipywidgets
+# - traitlets
+# - nest_asyncio
+# - pyccolo==0.0.73
+
+# 環境変数管理
+python-dotenv>=1.0.1
+
+# 開発・デバッグ用（本番環境では不要な場合があります）
+debugpy>=1.8.0
+
+# ビルド用（Electron アプリのビルドで使用）
+pyinstaller>=6.0.0
+
+# テスト用（開発環境でのみ使用）
+pytest>=7.4.0
+pytest-asyncio>=0.21.0

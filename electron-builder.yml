@@ -1,0 +1,32 @@
+appId: com.Jupyter.desktop
+productName: jupyter-desktop
+directories:
+  output: dist-electron
+files:
+  - dist/**
+  - electron/**
+asar: true
+extraMetadata:
+  main: electron/main.js
+extraResources:
+  - from: backend/dist
+    to: flask-backend
+    filter:
+      - "app.exe"
+      - "app"
+      - "**/*"
+publish: null
+win:
+  target:
+    - nsis
+  icon: public/favicon.png
+linux:
+  target:
+    - AppImage
+    - deb
+  maintainer: support@backcastpro.com
+  category: Utility
+mac:
+  target:
+    - dmg
+
