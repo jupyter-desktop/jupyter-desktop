@@ -1,4 +1,4 @@
-# <img src="https://raw.githubusercontent.com/botterYosuke/jupyter-desktop/main/public/favicon.drawio.svg" alt="jupyter-desktop Logo" width="40" height="24"> jupyter-desktop
+# <img src="https://raw.githubusercontent.com/jupyter-desktop/jupyter-desktop/main/public/favicon.drawio.svg" alt="jupyter-desktop Logo" width="40" height="24"> jupyter-desktop
 
 JupyterLab + ipyflow で動作する Angular 製フロントエンドアプリケーション
 
