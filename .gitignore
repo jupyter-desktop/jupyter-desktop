@@ -44,3 +44,5 @@ Thumbs.db
 .nx/
 test-results/
 playwright-report/
+build/
+jupyter_desktop.egg-info/

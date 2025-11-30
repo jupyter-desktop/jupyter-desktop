@@ -146,7 +146,7 @@ interface RestoreWindowsOptions {
       height: 36px;
       display: grid;
       place-items: center;
-      background: var(--bg-button-primary);
+      background: transparent;
       opacity: 0.5;
       border: none;
       border-radius: 4px;
@@ -158,12 +158,12 @@ interface RestoreWindowsOptions {
     }
 
     .session-reset-btn:hover {
-      background: var(--bg-button-primary-hover);
+      background: transparent;
       opacity: 0.7;
     }
 
     .session-reset-btn:active {
-      background: var(--bg-button-primary);
+      background: transparent;
       opacity: 1;
     }
 
