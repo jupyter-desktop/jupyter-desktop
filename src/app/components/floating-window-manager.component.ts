@@ -97,8 +97,8 @@ interface RestoreWindowsOptions {
       position: absolute;
       top: 16px;
       right: 16px;
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      display: flex;
+      justify-content: flex-end;
       gap: 12px;
       align-items: center;
       background: transparent;
@@ -707,8 +707,8 @@ export class FloatingWindowManagerComponent implements OnInit, AfterViewInit, On
     const infoWindowCount = this.windows.filter(w => w.type === 'info').length;
     const windowTitle = infoWindowCount === 0 ? 'Information' : `Information ${infoWindowCount + 1}`;
     
-    // デフォルトのHTMLファイル名を設定
-    const initialContent = 'home.html';
+    // デフォルトのコンテンツを空文字列に設定（ヒントを表示するため）
+    const initialContent = '';
     
     // 情報ウィンドウを作成
     this.windowManager.createWindow(windowTitle, initialContent, false, undefined, 'info');

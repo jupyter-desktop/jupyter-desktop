@@ -60,7 +60,7 @@ import { ThemeService } from '../services/theme.service';
     >
       <div class="window-titlebar" (mousedown)="onTitleBarMouseDown($event)">
         <div class="titlebar-left">
-          <span class="window-title">Information</span>
+          <span class="window-title">Markdown</span>
         </div>
         <div class="titlebar-buttons">
           <button class="titlebar-btn" (click)="minimizeWindow()" title="Minimize">

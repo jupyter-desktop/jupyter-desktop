@@ -86,18 +86,16 @@ import { Subscription, combineLatest } from 'rxjs';
   styleUrls: ['../styles/floating-window-base.styles.scss'],
   styles: [`
     .floating-window.console-window {
-      border: 1px solid var(--border-color-light);
+      border: none;
       box-shadow: none;
       backdrop-filter: blur(18px) saturate(140%);
       -webkit-backdrop-filter: blur(18px) saturate(140%);
-      transition: transform 0.2s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+      transition: transform 0.2s ease, box-shadow 0.3s ease;
     }
 
     .floating-window.console-window:hover,
     .floating-window.console-window.is-active {
-      border-color: var(--accent-cyan);
       box-shadow:
-        0 0 0 1px var(--accent-cyan),
         0 0 30px rgba(0, 172, 193, 0.35),
         0 40px 130px rgba(0, 172, 193, 0.4);
     }
@@ -108,7 +106,7 @@ import { Subscription, combineLatest } from 'rxjs';
         var(--bg-window-titlebar-gradient-start) 0%,
         var(--bg-window-titlebar-gradient-end) 100%
       );
-      border-bottom: 1px solid var(--border-color-light);
+      border-bottom: none;
       backdrop-filter: blur(12px);
     }
 
