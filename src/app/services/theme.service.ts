@@ -1,5 +1,4 @@
 import { Injectable } from '@angular/core';
-import { staticThemeImporters, THEME_IDS } from '../plugin/theme-config.generated';
 
 /**
  * Monaco Editorのテーマ設定インターフェース
@@ -39,7 +38,6 @@ export interface ThemeConfig {
    * テーマの読み込み、適用、保存を管理します。
    * テーマの読み込みは以下の順序で試行されます：
    * 1. 公式テーマ（src/app/themes/${themeId}/theme.config.ts）
-   * 2. カスタムテーマ（plugin/frontend/themes/${themeId}/theme.config.ts）- 存在する場合のみ
    */
 @Injectable({
   providedIn: 'root'
@@ -90,34 +88,16 @@ export class ThemeService {
     if (this.defaultThemeId === null) {
       this.defaultThemeId = await this.determineDefaultTheme();
     }
-
-    // プラグインテーマが存在する場合は、localStorageの値を無視してデフォルトテーマを使用
-    // （プラグインテーマはフロントエンドで完結しているため、常に最新の状態を反映）
-    // プラグインテーマが0個の場合も、determineDefaultTheme()で公式テーマが選ばれているので、
-    // 常にdefaultThemeIdを使用する
-    const pluginThemes = Array.from(THEME_IDS);
-    const themeId = pluginThemes.length > 0 
-      ? this.defaultThemeId  // プラグインテーマが存在する場合
-      : (localStorage.getItem(this.STORAGE_KEY) || this.defaultThemeId);  // プラグインテーマが0個の場合はlocalStorageまたはデフォルト
-    console.log(`[ThemeService] Loading theme: ${themeId} (saved: ${localStorage.getItem(this.STORAGE_KEY)}, default: ${this.defaultThemeId}, plugin themes: ${pluginThemes.length})`);
-    await this.loadTheme(themeId);
+    console.log(`[ThemeService] Loading theme: ${this.defaultThemeId} (saved: ${localStorage.getItem(this.STORAGE_KEY)}, default: ${this.defaultThemeId})`);
+    await this.loadTheme(this.defaultThemeId);
   }
 
   /**
    * デフォルトテーマを決定する
-   * pluginフォルダに有効なテーマがあれば最初のテーマを、
-   * なければsrc/app/themes/フォルダ内の最初のテーマを返す
+   * src/app/themes/フォルダ内の最初のテーマを返す
    */
   private async determineDefaultTheme(): Promise<string> {
-    // まずpluginフォルダ内のテーマをスキャン
-    const pluginThemes = await this.scanThemes('plugin/frontend/themes');
-    console.log(`[ThemeService] Plugin themes found:`, pluginThemes);
-    if (pluginThemes.length > 0) {
-      console.log(`[ThemeService] Using plugin theme as default: ${pluginThemes[0]}`);
-      return pluginThemes[0];
-    }
 
-    // pluginフォルダにテーマがなければ、公式テーマをスキャン
     const officialThemes = await this.scanThemes('src/app/themes');
     console.log(`[ThemeService] Official themes found:`, officialThemes);
     if (officialThemes.length > 0) {
@@ -139,20 +119,7 @@ export class ThemeService {
     const themes: string[] = [];
 
     try {
-      // プラグインディレクトリの場合は、静的インポートを優先（フロントエンドで完結）
-      if (basePath.startsWith('plugin/')) {
-        // 静的インポートを使用してテーマIDを取得
-        // THEME_IDSはビルド時に生成され、以下の場合に空配列になる：
-        // 1. プラグインフォルダが存在しない場合
-        // 2. プラグインフォルダが存在するが、テーマが0個の場合
-        const themeIds = Array.from(THEME_IDS);
-        console.log(`[ThemeService] Scanned plugin themes:`, themeIds);
-        // カスタムテーマが0個の場合でも空配列を返す（正常な状態）
-        // 呼び出し元（determineDefaultTheme）で公式テーマにフォールバックされる
-        return themeIds;
-      }
-
-      // 公式テーマの場合は、既知のテーマ名のリストを使用
+       // 公式テーマの場合は、既知のテーマ名のリストを使用
       // 公式テーマの既知の名前（src/app/themes/）
       // 動的インポートは開発環境で問題を起こす可能性があるため、既知のリストを使用
       const officialThemeNames = ['jupyter-light-theme'];
@@ -183,26 +150,9 @@ export class ThemeService {
     } catch (error) {
       console.warn(`Failed to load official theme: ${themeId}`, error);
     }
-    
-    // 方法2: カスタムテーマから読み込む（plugin/frontend/themes/）- 静的インポートを使用
-    try {
-      // 静的インポーターを使用してテーマを読み込む
-      const staticImporter = staticThemeImporters[themeId];
-      if (staticImporter) {
-        console.log(`[ThemeService] Loading custom theme: ${themeId}`);
-        const theme = await staticImporter();
-        console.log(`[ThemeService] Custom theme loaded: ${themeId}`, theme);
-        return theme;
-      } else {
-        console.log(`[ThemeService] No static importer found for theme: ${themeId}`);
-      }
-    } catch (error) {
-      // プラグインディレクトリが存在しない、またはテーマが存在しない場合は無視
-      console.error(`[ThemeService] Failed to load custom theme: ${themeId}`, error);
-    }
-    
+   
     // すべての方法が失敗した場合
-    throw new Error(`Theme ${themeId} not found in official themes or custom themes`);
+    throw new Error(`Theme ${themeId} not found in official themes`);
   }
 
   /**

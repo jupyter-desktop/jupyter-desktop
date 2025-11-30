@@ -28,12 +28,10 @@ import { ThemeService } from '../services/theme.service';
  * 【責務の境界】
  * - このコンポーネントはウィンドウの表示と操作のみを担当
  * - ウィンドウの作成や削除はFloatingWindowManagerComponentが担当
- * - プラグインが無い場合のフォールバック用コンポーネント
  * - Monaco Editorによる編集機能を提供
  * 
  * 【設計方針】
- * - プラグイン側のPluginInfoWindowComponentが使用できない場合のフォールバック
- * - Monaco Editorによる編集機能を提供（プラグイン側から移動）
+ * - Monaco Editorによる編集機能を提供
  * 
  * 【パフォーマンス最適化】
  * - OnPush変更検知戦略の採用

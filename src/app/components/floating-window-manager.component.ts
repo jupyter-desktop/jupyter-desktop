@@ -20,7 +20,6 @@ import { NotebookService } from '../services/notebook/notebook.service';
 import { ExecutionService } from '../services/python-runtime/execution.service';
 import { PythonRuntimeService } from '../services/python-runtime/python-runtime.service';
 import { IpyflowCommService } from '../services/python-runtime/ipyflow-comm.service';
-import { PluginLoaderService } from '../plugin/plugin-loader.service';
 import { Subscription } from 'rxjs';
 
 interface RestoreWindowsOptions {
@@ -236,7 +235,6 @@ export class FloatingWindowManagerComponent implements OnInit, AfterViewInit, On
   private executionService = inject(ExecutionService);
   private pythonRuntime = inject(PythonRuntimeService);
   private ipyflowComm = inject(IpyflowCommService);
-  private pluginLoaderService = inject(PluginLoaderService);
   
   windows: FloatingWindow[] = [];
   minimizedWindows: FloatingWindow[] = [];
@@ -601,27 +599,10 @@ export class FloatingWindowManagerComponent implements OnInit, AfterViewInit, On
     let componentRef: ComponentRef<FloatingEditorWindowComponent | FloatingInfoWindowComponent>;
     
     if (window.type === 'info') {
-      // プラグインシステムから置き換えコンポーネントを取得
-      const replacementComponent = this.pluginLoaderService.getWindowTypeReplacement('info');
-      if (replacementComponent) {
-        try {
-          componentRef = createComponent(replacementComponent, {
-            environmentInjector: this.injector
-          });
-          console.log('[FloatingWindowManager] Using plugin replacement component for info window');
-        } catch (error) {
-          console.error('[FloatingWindowManager] Failed to create plugin component, falling back to default:', error);
-          // フォールバック: 既存のコンポーネントを使用
-          componentRef = createComponent(FloatingInfoWindowComponent, {
-            environmentInjector: this.injector
-          });
-        }
-      } else {
-        // フォールバック: 既存のコンポーネントを使用
-        componentRef = createComponent(FloatingInfoWindowComponent, {
-          environmentInjector: this.injector
-        });
-      }
+      // フォールバック: 既存のコンポーネントを使用
+      componentRef = createComponent(FloatingInfoWindowComponent, {
+        environmentInjector: this.injector
+      });
     } else {
       componentRef = createComponent(FloatingEditorWindowComponent, {
         environmentInjector: this.injector
