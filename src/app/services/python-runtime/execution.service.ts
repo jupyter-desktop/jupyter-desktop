@@ -66,7 +66,7 @@ export class ExecutionService {
   /**
    * Pythonコードを実行
    */
-  async runPython(code: string, editorId?: string, currentDate?: string): Promise<ExecutionResult> {
+  async runPython(code: string, editorId?: string): Promise<ExecutionResult> {
     // 全体で1つのセッションを使用（editorIdは記録のみ）
     if (editorId) {
       await this.pythonRuntime.initializeForEditor(editorId);
@@ -94,19 +94,6 @@ export class ExecutionService {
 
     return new Promise<ExecutionResult>((resolve, reject) => {
       try {
-        // currentDateを設定（必要に応じて）
-        if (currentDate) {
-          // currentDate変数を設定するコードを先に実行
-          const setDateCode = `current_date = '${currentDate}'`;
-          this.pythonRuntime.sendJSPMessage('execute_request', {
-            code: setDateCode,
-            silent: true,
-            store_history: false,
-            user_expressions: {},
-            allow_stdin: false
-          });
-        }
-
         // execute_requestメッセージを送信
         // IPyflow統合用: cellIdをメタデータに追加（IPyflowが各実行を「セル」として認識するため）
         const cellId = editorId || this.generateCellId();
@@ -168,7 +155,7 @@ export class ExecutionService {
     if (!this.pythonRuntime.isReady()) {
       return;
     }
-    this.pythonRuntime.sendJSPMessage('interrupt_request', {});
+    this.pythonRuntime.sendInterruptRequest();
     this.executionStateSubject.next('idle');
   }
 

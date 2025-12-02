@@ -70,8 +70,7 @@ export class PythonRuntimeService {
    * ServiceManager を初期化
    */
   private initializeServiceManager(): void {
-    const baseUrl = environment.pythonBackendUrl || 'http://localhost:8888';
-    const wsUrl = environment.pythonBackendWsUrl || baseUrl.replace(/^http/, 'ws');
+    const { baseUrl, wsUrl } = this.resolveServerUrls();
     
     const settings = ServerConnection.makeSettings({
       baseUrl: baseUrl,
@@ -85,6 +84,43 @@ export class PythonRuntimeService {
       serverSettings: settings,
       kernelManager: this.serviceManager.kernels
     });
+  }
+
+  /**
+   * サーバーURLを解決する
+   * 
+   * 優先順位:
+   * 1. environment.pythonBackendUrl が明示的に設定されている場合（localhost:8888 など）→ そのまま使用
+   * 2. environment.pythonBackendUrl が空文字列の場合 → 現在のオリジンを自動検出（binder環境用）
+   * 3. フォールバック → localhost:8888
+   */
+  private resolveServerUrls(): { baseUrl: string; wsUrl: string } {
+    // 環境変数が明示的に設定されている場合（空文字列以外）
+    if (environment.pythonBackendUrl && environment.pythonBackendUrl.length > 0) {
+      const baseUrl = environment.pythonBackendUrl;
+      const wsUrl = environment.pythonBackendWsUrl && environment.pythonBackendWsUrl.length > 0
+        ? environment.pythonBackendWsUrl
+        : baseUrl.replace(/^http/, 'ws');
+      return { baseUrl, wsUrl };
+    }
+
+    // 空文字列の場合: binder/JupyterLab環境 → 現在のオリジンを使用
+    // ブラウザ環境かどうかをチェック
+    if (typeof window !== 'undefined' && window.location) {
+      const origin = window.location.origin;
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${wsProtocol}//${window.location.host}`;
+      
+      console.log('[PythonRuntime] binder/JupyterLab環境を検出: オリジンを自動使用', { baseUrl: origin, wsUrl });
+      return { baseUrl: origin, wsUrl };
+    }
+
+    // フォールバック: ローカル開発環境
+    console.log('[PythonRuntime] フォールバック: localhost:8888 を使用');
+    return {
+      baseUrl: 'http://localhost:8888',
+      wsUrl: 'ws://localhost:8888'
+    };
   }
 
   /**
@@ -401,37 +437,4 @@ export class PythonRuntimeService {
     this.connectionPromise = null;
   }
 
-  // 後方互換性のためのメソッド（ExecutionService と OutputService で使用）
-  
-  /**
-   * 旧API: sendJSPMessage（互換性維持）
-   * @deprecated 代わりに sendExecuteRequest を使用してください
-   */
-  sendJSPMessage(msgType: string, content: any, buffers?: ArrayBuffer[]): void {
-    if (msgType === 'execute_request') {
-      this.sendExecuteRequest(content.code || '', content);
-    } else if (msgType === 'interrupt_request') {
-      this.sendInterruptRequest();
-    } else {
-      console.warn('[PythonRuntime] 未対応のメッセージタイプ:', msgType);
-    }
-  }
-
-  /**
-   * 旧API: sendJSPMessageWithId（互換性維持）
-   * @deprecated 代わりに sendExecuteRequest を使用してください
-   */
-  sendJSPMessageWithId(
-    msgType: string, 
-    content: any, 
-    msgId: string, 
-    buffers?: ArrayBuffer[],
-    metadata?: any
-  ): void {
-    if (msgType === 'execute_request') {
-      this.sendExecuteRequest(content.code || '', content, metadata);
-    } else {
-      console.warn('[PythonRuntime] 未対応のメッセージタイプ:', msgType);
-    }
-  }
 }
