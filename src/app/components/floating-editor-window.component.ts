@@ -309,6 +309,18 @@ export class FloatingEditorWindowComponent implements AfterViewInit, OnDestroy {
       this.windowManager.ensureInitialPlacement(this.windowId, this.windowRootRef);
     });
   }
+  
+  /**
+   * JupyterLab環境を検出してMonaco EditorのベースURLを取得
+   */
+  private baseUrl = () => {
+    // JupyterLab環境を検出（パスに/lab/が含まれている場合）
+    if (typeof window !== 'undefined' && window.location.pathname.includes('/lab/')) {
+      return '/lab/extensions/jupyter-desktop/static/browser/';
+    }
+    // 通常のWeb環境
+    return '';
+  }
 
   /**
    * Monaco Editorを初期化します
@@ -351,7 +363,7 @@ export class FloatingEditorWindowComponent implements AfterViewInit, OnDestroy {
 
     const initEditor = () => {
       w.require.config({ 
-        paths: { vs: 'assets/monaco/vs' },
+        paths: { vs: `${this.baseUrl()}assets/monaco/vs` },
         'vs/nls': { availableLanguages: {} }
       });
       
@@ -397,7 +409,7 @@ export class FloatingEditorWindowComponent implements AfterViewInit, OnDestroy {
     };
 
     if (!w.require) {
-      const existingScript = document.querySelector('script[src="assets/monaco/vs/loader.js"]');
+      const existingScript = document.querySelector(`script[src="${this.baseUrl()}assets/monaco/vs/loader.js"]`);
       if (existingScript) {
         if (w.require) {
           initEditor();
@@ -408,7 +420,7 @@ export class FloatingEditorWindowComponent implements AfterViewInit, OnDestroy {
       } else {
         const loaderScript = document.createElement('script');
         loaderScript.type = 'text/javascript';
-        loaderScript.src = 'assets/monaco/vs/loader.js';
+        loaderScript.src = `${this.baseUrl()}assets/monaco/vs/loader.js`;
         loaderScript.addEventListener('load', initEditor, { once: true });
         loaderScript.addEventListener('error', resolveEditorReady, { once: true });
         document.body.appendChild(loaderScript);
