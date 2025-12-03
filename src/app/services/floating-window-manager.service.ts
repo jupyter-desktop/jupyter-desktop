@@ -94,13 +94,22 @@ export class FloatingWindowManagerService {
 
   createWindow(title: string = 'Untitled', content: string = '', autoRun: boolean = false, filePath?: string, type: 'editor' | 'info' | 'console' = 'editor'): string {
     const id = `window-${this.nextId++}`;
+    
+    // タイプに応じてデフォルトサイズを設定
+    let defaultWidth = 300;
+    let defaultHeight = 200;
+    if (type === 'info') {
+      defaultWidth = 500;
+      defaultHeight = 400;
+    }
+    
     const newWindow: FloatingWindow = {
       id,
       title,
       x: 0,
       y: 0,
-      width: 300,
-      height: 200,
+      width: defaultWidth,
+      height: defaultHeight,
       zIndex: ++this.maxZIndex,
       isMinimized: false,
       content,
@@ -297,7 +306,7 @@ export class FloatingWindowManagerService {
 
     const consoleWindow: FloatingWindow = {
       id: `${editorId}-console`,
-      title: `${editorWindow.title} - Console`,
+      title: editorWindow.title,
       x: editorWindow.x + editorWindow.width + 30,
       y: editorWindow.y,
       width: 300,

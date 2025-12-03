@@ -138,7 +138,6 @@ export class ExecutionService {
           // IpyflowCommService.computeExecSchedule()を呼び出す
           // これにより、IPyflowが依存関係を計算し、ready_cellsを通知する
           await this.ipyflowComm.computeExecSchedule(editorId);
-          console.log(`[ExecutionService] computeExecSchedule called for editor: ${editorId}`);
         } catch (error) {
           console.error('[ExecutionService] Error calling computeExecSchedule:', error);
           // エラーが発生しても実行は成功として扱う
@@ -192,8 +191,6 @@ export class ExecutionService {
       
       // IPyflow統合用: ウィンドウ単位の実行状態もリセット
       this.windowExecutionStates.forEach(state => state.next('idle'));
-
-      console.log('[ExecutionService] セッションリセット完了');
     } catch (error) {
       console.error('[ExecutionService] セッションリセットエラー:', error);
       this.executionStateSubject.next('error');
@@ -339,12 +336,10 @@ export class ExecutionService {
         const editorId = reexecutionEditorId || this.resolveEditorId(executionId, requestId, content);
         
         if (isReexecution && reexecutionEditorId) {
-          console.log(`[ExecutionService] IPyflow re-execution detected for editor: ${reexecutionEditorId}`);
           // 再実行通知: 出力をクリアしてから実行状態を更新
           if (editorId) {
             // 再実行時は出力をクリア（新しい出力を表示するため）
             this.outputService.clearOutput(editorId);
-            console.log(`[ExecutionService] [DEBUG] Cleared output for re-execution: editorId=${editorId}`);
             this.updateWindowExecutionState(editorId, 'running');
           }
         } else if (editorId) {
@@ -534,7 +529,6 @@ export class ExecutionService {
   markWindowsForReexecution(windowIds: string[]): void {
     for (const windowId of windowIds) {
       this.windowsNeedingReexecution.add(windowId);
-      console.log(`[ExecutionService] Marked window ${windowId} for re-execution`);
     }
   }
 

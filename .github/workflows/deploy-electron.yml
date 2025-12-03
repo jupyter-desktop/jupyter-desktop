@@ -49,13 +49,28 @@ jobs:
       - name: Build Electron app
         run: npm run build
 
+      - name: List files in dist-electron
+        run: |
+          echo "=== Files in dist-electron ==="
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            dir dist-electron /b || true
+          else
+            ls -lah dist-electron/ || true
+            find dist-electron -type f -name "*.AppImage" -o -name "*.deb" -o -name "*.exe" -o -name "*.blockmap" || true
+          fi
+
       - name: Upload Electron artifacts
         uses: actions/upload-artifact@v4
         with:
           name: electron-${{ matrix.os }}
-          path: dist-electron/*
-          retention-days: 7
+          path: |
+            dist-electron/*.AppImage
+            dist-electron/*.deb
+            dist-electron/*.exe
+            dist-electron/*.blockmap
+          retention-days: 1
           if-no-files-found: error
+          compression-level: 9
 
   release-electron:
     name: Create GitHub Release

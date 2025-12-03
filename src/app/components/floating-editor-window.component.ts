@@ -44,6 +44,7 @@ import { Subscription, combineLatest } from 'rxjs';
       class="floating-window"
       [attr.data-window-id]="windowId"
       [class.minimized]="window.isMinimized"
+      [class.running]="isRunning"
       [style.left.px]="window.x"
       [style.top.px]="window.y"
       [style.width.px]="window.width"
@@ -53,14 +54,16 @@ import { Subscription, combineLatest } from 'rxjs';
     >
       <div class="window-titlebar" (mousedown)="onTitleBarMouseDown($event)">
         <div class="titlebar-controls">
-          @if (isRunning) {
-            <button class="titlebar-btn stop-btn" (click)="stopCode()" title="Stop execution">
-              ⏹️
-            </button>
-          } @else {
-            <button class="titlebar-btn run-btn" (click)="runCode()" title="Run Python code (Ctrl+Enter)">
-              ▶️
-            </button>
+          @if (connectionReady) {
+            @if (isRunning) {
+              <button class="titlebar-btn stop-btn" (click)="stopCode()" title="Stop execution">
+                ⏹️
+              </button>
+            } @else {
+              <button class="titlebar-btn run-btn" (click)="runCode()" title="Run Python code (Ctrl+Enter)">
+                ▶️
+              </button>
+            }
           }
           <button class="titlebar-btn clear-btn" (click)="clearConsole()" title="Clear console">
             🗑️
@@ -148,6 +151,28 @@ import { Subscription, combineLatest } from 'rxjs';
       width: 100%;
       height: 100%;
     }
+
+    /* 実行中のグロー効果 */
+    .floating-window.running {
+      animation: glow-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes glow-pulse {
+      0%, 100% {
+        box-shadow: 
+          0 0 20px rgba(76, 175, 80, 0.5),
+          0 0 40px rgba(76, 175, 80, 0.4),
+          0 0 60px rgba(76, 175, 80, 0.3),
+          0 0 80px rgba(76, 175, 80, 0.2);
+      }
+      50% {
+        box-shadow: 
+          0 0 30px rgba(76, 175, 80, 0.8),
+          0 0 60px rgba(76, 175, 80, 0.6),
+          0 0 90px rgba(76, 175, 80, 0.4),
+          0 0 120px rgba(76, 175, 80, 0.3);
+      }
+    }
   `]
 })
 export class FloatingEditorWindowComponent implements AfterViewInit, OnDestroy {
@@ -169,7 +194,7 @@ export class FloatingEditorWindowComponent implements AfterViewInit, OnDestroy {
   isRunning = false;
   needsReexecution = false; // IPyflow統合用: 再実行が必要かどうか
   private latestExecutionState: ExecutionState = 'idle';
-  private connectionReady = false;
+  connectionReady = false;
   private previousNeedsReexecution = false; // 自動再実行用: 前回のneedsReexecution状態
   private isAutoReexecuting = false; // 自動再実行中フラグ（無限ループ防止）
 
@@ -224,7 +249,6 @@ export class FloatingEditorWindowComponent implements AfterViewInit, OnDestroy {
         // needsReexecutionがfalseからtrueに変化したとき、かつ実行中でない場合に自動実行
         if (needsReexecutionChanged && currentNeedsReexecution && !this.isRunning && !this.isAutoReexecuting) {
           this.isAutoReexecuting = true;
-          console.log(`[FloatingEditorWindow] Auto re-executing window: ${this.windowId}`);
           // 非同期で実行（現在の変更検知サイクルを完了させてから実行）
           Promise.resolve().then(() => {
             this.runCode().finally(() => {
@@ -254,7 +278,6 @@ export class FloatingEditorWindowComponent implements AfterViewInit, OnDestroy {
           // needsReexecutionがfalseからtrueに変化したとき、かつ実行中でない場合に自動実行
           if (needsReexecutionChanged && currentNeedsReexecution && !this.isRunning && !this.isAutoReexecuting) {
             this.isAutoReexecuting = true;
-            console.log(`[FloatingEditorWindow] Auto re-executing window (from readyCells$): ${this.windowId}`);
             // 非同期で実行（現在の変更検知サイクルを完了させてから実行）
             Promise.resolve().then(() => {
               this.runCode().finally(() => {

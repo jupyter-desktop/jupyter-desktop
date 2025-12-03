@@ -155,8 +155,6 @@ export class PythonRuntimeService {
       if (!this.session) {
         const uniquePath = `jupyter-desktop-${this.instanceId}`;
         
-        console.log('[PythonRuntime] セッション作成開始');
-        
         // セッションを作成（カーネルも自動的に作成される）
         this.session = await this.sessionManager.startNew({
           path: uniquePath,
@@ -177,13 +175,10 @@ export class PythonRuntimeService {
         if (this.kernel) {
           try {
             await this.kernel.info;
-            console.log('[PythonRuntime] カーネル情報取得完了');
           } catch (error) {
             console.warn('[PythonRuntime] カーネル情報取得エラー（続行）:', error);
           }
         }
-
-        console.log('[PythonRuntime] セッション作成成功:', this.session.id);
       }
       
       this.initialized = true;
@@ -330,21 +325,17 @@ export class PythonRuntimeService {
     }
 
     try {
-      console.log('[PythonRuntime] カーネル再起動開始');
       await this.kernel.restart();
       
       // 再起動後、カーネル情報を取得して初期化を完了
       try {
         await this.kernel.info;
-        console.log('[PythonRuntime] カーネル情報取得完了（再起動後）');
       } catch (error) {
         console.warn('[PythonRuntime] カーネル情報取得エラー（続行）:', error);
       }
       
       // 再起動後もinitializedをtrueに保つ
       this.initialized = true;
-      
-      console.log('[PythonRuntime] カーネル再起動完了');
     } catch (error) {
       console.error('[PythonRuntime] カーネル再起動エラー:', error);
       throw error;
@@ -366,8 +357,6 @@ export class PythonRuntimeService {
     try {
       // カーネルを再起動
       await this.restartKernel();
-      
-      console.log('[PythonRuntime] セッションリセット完了');
     } catch (error) {
       console.error('[PythonRuntime] セッションリセットエラー:', error);
       throw error;

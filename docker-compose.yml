@@ -7,6 +7,8 @@ services:
       ENV: ${ENV:-development}
       DEBUGPY_ENABLED: ${DEBUGPY_ENABLED:-true}
       DEBUGPY_WAIT_FOR_CLIENT: ${DEBUGPY_WAIT_FOR_CLIENT:-false}
+      IPYTHONDIR: /backend/.ipython
+      JUPYTER_PATH: /backend/.ipython
     ports:
       - '8888:8888'
       - '5678:5678'  # デバッグポート

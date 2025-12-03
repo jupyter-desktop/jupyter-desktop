@@ -88,7 +88,6 @@ export class ThemeService {
     if (this.defaultThemeId === null) {
       this.defaultThemeId = await this.determineDefaultTheme();
     }
-    console.log(`[ThemeService] Loading theme: ${this.defaultThemeId} (saved: ${localStorage.getItem(this.STORAGE_KEY)}, default: ${this.defaultThemeId})`);
     await this.loadTheme(this.defaultThemeId);
   }
 
@@ -99,14 +98,11 @@ export class ThemeService {
   private async determineDefaultTheme(): Promise<string> {
 
     const officialThemes = await this.scanThemes('src/app/themes');
-    console.log(`[ThemeService] Official themes found:`, officialThemes);
     if (officialThemes.length > 0) {
-      console.log(`[ThemeService] Using official theme as default: ${officialThemes[0]}`);
       return officialThemes[0];
     }
 
     // フォールバック（通常は発生しない）
-    console.log(`[ThemeService] Using fallback theme: jupyter-light-theme`);
     return 'jupyter-light-theme';
   }
 
@@ -209,14 +205,12 @@ export class ThemeService {
       const isDark = this.isDarkColor(bgColor);
       const defaultTheme = isDark ? 'vs-dark' : 'vs';
       w.monaco.editor.setTheme(defaultTheme);
-      console.log(`[ThemeService] Applied default Monaco theme: ${defaultTheme}`);
       return;
     }
     
     // 文字列の場合は既存のテーマ名として使用
     if (typeof monacoTheme === 'string') {
       w.monaco.editor.setTheme(monacoTheme);
-      console.log(`[ThemeService] Applied Monaco theme: ${monacoTheme}`);
       return;
     }
     
@@ -228,13 +222,11 @@ export class ThemeService {
       w.monaco.editor.defineTheme(themeName, monacoTheme);
       // テーマを適用
       w.monaco.editor.setTheme(themeName);
-      console.log(`[ThemeService] Applied custom Monaco theme: ${themeName}`);
     } catch (error) {
       console.error('[ThemeService] Failed to apply Monaco Editor theme:', error);
       // エラー時はフォールバックテーマを使用
       const fallbackTheme = monacoTheme.base || 'vs-dark';
       w.monaco.editor.setTheme(fallbackTheme);
-      console.log(`[ThemeService] Applied fallback Monaco theme: ${fallbackTheme}`);
     }
   }
 
@@ -261,7 +253,6 @@ export class ThemeService {
       const checkInterval = setInterval(() => {
         if (w.monaco && w.monaco.editor) {
           clearInterval(checkInterval);
-          console.log('[ThemeService] Monaco Editor loaded');
           resolve();
         }
       }, 100);

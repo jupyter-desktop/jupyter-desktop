@@ -56,14 +56,30 @@ def main():
     backend_dir = Path(__file__).parent.absolute()
     config_file = backend_dir / 'jupyter_server_config.py'
     
+    # デバッグモードの判定（環境変数で制御可能）
+    DEBUG = os.environ.get('ENV') == 'development' or os.environ.get('DEBUG_STARTUP', '').lower() == 'true'
+    
+    # IPythonプロファイルのパスを設定
+    # IPythonカーネルがプロジェクトローカルのプロファイルを使用するように設定
+    ipython_dir = backend_dir / '.ipython'
+    if ipython_dir.exists():
+        os.environ['IPYTHONDIR'] = str(ipython_dir)
+        # JUPYTER_PATHも設定して、カスタムカーネル設定を読み込む
+        jupyter_path = str(ipython_dir)
+        os.environ['JUPYTER_PATH'] = jupyter_path
+        if DEBUG:
+            print(f'[Jupyter Server] IPythonディレクトリを設定: {ipython_dir}')
+            print(f'[Jupyter Server] JUPYTER_PATHを設定: {jupyter_path}')
+    
     # 設定ファイルが存在する場合、JUPYTER_CONFIG_DIR を設定して確実に読み込む
     if config_file.exists():
         # JUPYTER_CONFIG_DIR を設定（Jupyter Server はこのディレクトリから jupyter_server_config.py を読み込む）
         os.environ['JUPYTER_CONFIG_DIR'] = str(backend_dir)
-        print(f'[Jupyter Server] 設定ファイルを読み込みます: {config_file}')
-        print(f'[Jupyter Server] JUPYTER_CONFIG_DIR: {backend_dir}')
+        if DEBUG:
+            print(f'[Jupyter Server] 設定ファイルを読み込みます: {config_file}')
+            print(f'[Jupyter Server] JUPYTER_CONFIG_DIR: {backend_dir}')
     else:
-        print(f'[Jupyter Server] 警告: 設定ファイルが見つかりません: {config_file}')
+        print(f'[Jupyter Server] 警告: 設定ファイルが見つかりません: {config_file}', file=sys.stderr)
     
     # ServerApp に渡す引数を構築
     server_args = [
@@ -87,9 +103,10 @@ def main():
     server_args.extend(unknown)
     
     # 起動情報をログに出力
-    print(f'[Jupyter Server] 起動中...')
-    print(f'[Jupyter Server] ホスト: {args.host}, ポート: {args.port}')
-    print(f'[Jupyter Server] 引数: {" ".join(server_args)}')
+    if DEBUG:
+        print(f'[Jupyter Server] 起動中...')
+        print(f'[Jupyter Server] ホスト: {args.host}, ポート: {args.port}')
+        print(f'[Jupyter Server] 引数: {" ".join(server_args)}')
     
     # sys.argv を一時的に置き換えて ServerApp を起動
     original_argv = sys.argv
