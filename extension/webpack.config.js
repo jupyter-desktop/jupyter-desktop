@@ -4,7 +4,7 @@ const { ModuleFederationPlugin } = webpack.container;
 const CopyPlugin = require("copy-webpack-plugin");
 
 // Package name (must match package.json name)
-const packageName = "jupyterlab-angular-demo";
+const packageName = "jupyter-desktop";
 
 // Packages that are provided by JupyterLab at runtime
 // These must NOT be bundled - they come from JupyterLab's shared scope

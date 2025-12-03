@@ -13,7 +13,7 @@ with open(os.path.join(HERE, "binder", "requirements.txt")) as f:
     requirements = [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
 setup(
-    name="jupyterlab-angular-demo",
+    name="jupyter-desktop",
     version=package_json["version"],
     description="Angular × JupyterLab Extension Demo",
     author="",

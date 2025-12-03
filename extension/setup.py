@@ -1,5 +1,5 @@
 """
-Setup file for jupyterlab-angular-demo JupyterLab extension.
+Setup file for jupyter-desktop JupyterLab extension.
 """
 from pathlib import Path
 from setuptools import setup
@@ -7,7 +7,7 @@ from setuptools import setup
 HERE = Path(__file__).parent.resolve()
 
 # The name of the project
-name = "jupyterlab-angular-demo"
+name = "jupyter-desktop"
 
 # Output directory is "../dist/jupyter-desktop" as specified in webpack.config.js
 lab_path = HERE.parent / "dist" / "jupyter-desktop"
@@ -23,13 +23,13 @@ ensured_targets = [
 # Note: lab_path is outside HERE, so we need to use absolute paths
 data_files_spec = [
     # Install package.json to the root of the extension directory
-    ("share/jupyter/labextensions/jupyterlab-angular-demo", str(HERE), "package.json"),
+    ("share/jupyter/labextensions/jupyter-desktop", str(HERE), "package.json"),
     # Install all static files (remoteEntry.js, index.js, etc.) from the dist directory
-    ("share/jupyter/labextensions/jupyterlab-angular-demo/static", str(lab_path), "**/*"),
+    ("share/jupyter/labextensions/jupyter-desktop/static", str(lab_path), "**/*"),
     # Install style files
-    ("share/jupyter/labextensions/jupyterlab-angular-demo/style", str(HERE / "style"), "**/*"),
+    ("share/jupyter/labextensions/jupyter-desktop/style", str(HERE / "style"), "**/*"),
     # Install install.json for extension metadata
-    ("share/jupyter/labextensions/jupyterlab-angular-demo", str(HERE), "install.json"),
+    ("share/jupyter/labextensions/jupyter-desktop", str(HERE), "install.json"),
 ]
 
 setup_args = dict(
@@ -68,14 +68,14 @@ try:
     # Install package.json
     if (HERE / "package.json").exists():
         data_files.append((
-            "share/jupyter/labextensions/jupyterlab-angular-demo",
+            "share/jupyter/labextensions/jupyter-desktop",
             [str(HERE / "package.json")]
         ))
     
     # Install install.json
     if (HERE / "install.json").exists():
         data_files.append((
-            "share/jupyter/labextensions/jupyterlab-angular-demo",
+            "share/jupyter/labextensions/jupyter-desktop",
             [str(HERE / "install.json")]
         ))
     
@@ -86,7 +86,7 @@ try:
             static_files.extend(glob(str(lab_path / pattern), recursive=True))
         if static_files:
             data_files.append((
-                "share/jupyter/labextensions/jupyterlab-angular-demo/static",
+                "share/jupyter/labextensions/jupyter-desktop/static",
                 static_files
             ))
     
@@ -98,7 +98,7 @@ try:
             style_files.extend(glob(str(style_dir / pattern), recursive=True))
         if style_files:
             data_files.append((
-                "share/jupyter/labextensions/jupyterlab-angular-demo/style",
+                "share/jupyter/labextensions/jupyter-desktop/style",
                 style_files
             ))
     

@@ -2,5 +2,5 @@
   "packageManager": "npm",
   "baseUrl": ".",
   "packages": [],
-  "packageName": "jupyterlab-angular-demo"
+  "packageName": "jupyter-desktop"
 }

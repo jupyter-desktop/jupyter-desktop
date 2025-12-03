@@ -14,20 +14,20 @@ async function loadAngularApp(): Promise<void> {
   return new Promise((resolve, reject) => {
     // 既に読み込まれているかチェック
     if ((window as any).__angular_app_loaded__) {
-      console.log('jupyterlab-angular-demo: Angular app already loaded');
+      console.log('jupyter-desktop: Angular app already loaded');
       resolve();
       return;
     }
 
     // スクリプトを読み込むヘルパー関数
-    const loadScript = (src: string, basePath: string = '/lab/extensions/jupyterlab-angular-demo/static/browser/'): Promise<void> => {
+    const loadScript = (src: string, basePath: string = '/lab/extensions/jupyter-desktop/static/browser/'): Promise<void> => {
       return new Promise((scriptResolve, scriptReject) => {
         // 既に読み込まれているかチェック
         const existingScript = Array.from(document.querySelectorAll('script[type="module"]')).find(
           (s: any) => s.src && s.src.includes(src.split('/').pop() || '')
         );
         if (existingScript) {
-          console.log(`jupyterlab-angular-demo: Script already loaded: ${src}`);
+          console.log(`jupyter-desktop: Script already loaded: ${src}`);
           scriptResolve();
           return;
         }
@@ -38,11 +38,11 @@ async function loadAngularApp(): Promise<void> {
         const scriptSrc = src.startsWith('/') ? src : `${basePath}${src}`;
         script.src = scriptSrc;
         script.onload = () => {
-          console.log(`jupyterlab-angular-demo: Script loaded successfully: ${scriptSrc}`);
+          console.log(`jupyter-desktop: Script loaded successfully: ${scriptSrc}`);
           scriptResolve();
         };
         script.onerror = (error) => {
-          console.error(`jupyterlab-angular-demo: Failed to load script: ${scriptSrc}`, error);
+          console.error(`jupyter-desktop: Failed to load script: ${scriptSrc}`, error);
           scriptReject(new Error(`Failed to load script: ${scriptSrc}`));
         };
         document.head.appendChild(script);
@@ -50,8 +50,8 @@ async function loadAngularApp(): Promise<void> {
     };
 
     // まずindex.htmlを取得してスクリプトタグを抽出を試みる
-    console.log('jupyterlab-angular-demo: Fetching index.html from /lab/extensions/jupyterlab-angular-demo/static/browser/index.html');
-    fetch('/lab/extensions/jupyterlab-angular-demo/static/browser/index.html')
+    console.log('jupyter-desktop: Fetching index.html from /lab/extensions/jupyter-desktop/static/browser/index.html');
+    fetch('/lab/extensions/jupyter-desktop/static/browser/index.html')
       .then(response => {
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -59,7 +59,7 @@ async function loadAngularApp(): Promise<void> {
         return response.text();
       })
       .then(html => {
-        console.log('jupyterlab-angular-demo: index.html fetched successfully');
+        console.log('jupyter-desktop: index.html fetched successfully');
         // HTMLからスクリプトタグを抽出
         const scriptRegex = /<script\s+src="([^"]+)"\s+type="module"><\/script>/g;
         const scripts: string[] = [];
@@ -68,7 +68,7 @@ async function loadAngularApp(): Promise<void> {
           scripts.push(match[1]);
         }
 
-        console.log('jupyterlab-angular-demo: Found scripts in index.html:', scripts);
+        console.log('jupyter-desktop: Found scripts in index.html:', scripts);
 
         // polyfillsとmainの順序を保持
         const polyfillsScript = scripts.find(s => s.includes('polyfills'));
@@ -78,16 +78,16 @@ async function loadAngularApp(): Promise<void> {
           throw new Error(`Angular scripts not found in index.html. Found scripts: ${scripts.join(', ')}`);
         }
 
-        console.log('jupyterlab-angular-demo: Loading Angular scripts:', polyfillsScript, mainScript);
+        console.log('jupyter-desktop: Loading Angular scripts:', polyfillsScript, mainScript);
 
         // polyfills → main の順で読み込む
         loadScript(polyfillsScript)
           .then(() => {
-            console.log('jupyterlab-angular-demo: Polyfills loaded, loading main script...');
+            console.log('jupyter-desktop: Polyfills loaded, loading main script...');
             return loadScript(mainScript);
           })
           .then(() => {
-            console.log('jupyterlab-angular-demo: All scripts loaded, waiting for Angular initialization...');
+            console.log('jupyter-desktop: All scripts loaded, waiting for Angular initialization...');
             // Angularアプリが初期化されるまで少し待つ
             return new Promise<void>((waitResolve) => {
               let attempts = 0;
@@ -96,12 +96,12 @@ async function loadAngularApp(): Promise<void> {
                 attempts++;
                 if (customElements.get('ng-jl-demo')) {
                   clearInterval(checkInterval);
-                  console.log('jupyterlab-angular-demo: ng-jl-demo custom element defined!');
+                  console.log('jupyter-desktop: ng-jl-demo custom element defined!');
                   (window as any).__angular_app_loaded__ = true;
                   resolve();
                 } else if (attempts >= maxAttempts) {
                   clearInterval(checkInterval);
-                  console.warn('jupyterlab-angular-demo: ng-jl-demo custom element not defined after 5 seconds, but scripts are loaded');
+                  console.warn('jupyter-desktop: ng-jl-demo custom element not defined after 5 seconds, but scripts are loaded');
                   // スクリプトは読み込まれたので、カスタム要素の定義は後で行われる可能性がある
                   (window as any).__angular_app_loaded__ = true;
                   resolve();
@@ -112,7 +112,7 @@ async function loadAngularApp(): Promise<void> {
           .catch(reject);
       })
       .catch((error) => {
-        console.error('jupyterlab-angular-demo: Failed to fetch index.html:', error);
+        console.error('jupyter-desktop: Failed to fetch index.html:', error);
         reject(error);
       });
   });
@@ -122,7 +122,7 @@ async function loadAngularApp(): Promise<void> {
  * メインプラグイン
  */
 const plugin: JupyterFrontEndPlugin<void> = {
-  id: 'jupyterlab-angular-demo',
+  id: 'jupyter-desktop',
   autoStart: true,
   requires: [INotebookTracker],
   optional: [ILauncher, IDocumentManager],
@@ -132,16 +132,16 @@ const plugin: JupyterFrontEndPlugin<void> = {
     launcher: ILauncher | null,
     docManager: IDocumentManager | null
   ) => {
-    console.log('jupyterlab-angular-demo: Plugin activating...');
-    console.log('jupyterlab-angular-demo: ILauncher available?', launcher !== null);
-    console.log('jupyterlab-angular-demo: IDocumentManager available?', docManager !== null);
+    console.log('jupyter-desktop: Plugin activating...');
+    console.log('jupyter-desktop: ILauncher available?', launcher !== null);
+    console.log('jupyter-desktop: IDocumentManager available?', docManager !== null);
     
     // Angularアプリを読み込む
     try {
       await loadAngularApp();
-      console.log('jupyterlab-angular-demo: Angular app loaded successfully');
+      console.log('jupyter-desktop: Angular app loaded successfully');
     } catch (error) {
-      console.error('jupyterlab-angular-demo: Failed to load Angular app:', error);
+      console.error('jupyter-desktop: Failed to load Angular app:', error);
       // エラーが発生しても続行（既に読み込まれている可能性がある）
     }
     
@@ -177,17 +177,17 @@ const plugin: JupyterFrontEndPlugin<void> = {
     };
 
     // コマンドを登録（ランチャーから呼び出せるように）
-    app.commands.addCommand('jupyterlab-angular-demo:open', {
-      label: 'Angular Panel',
+    app.commands.addCommand('jupyter-desktop:open', {
+      label: 'Desktop',
       iconClass: 'jp-AngularIcon',
       execute: () => {
         createNewNotebook();
       }
     });
-    console.log('jupyterlab-angular-demo: Command registered');
+    console.log('jupyter-desktop: Command registered');
 
     // 保存コマンドを登録
-    const saveCommand = 'jupyterlab-angular-demo:save';
+    const saveCommand = 'jupyter-desktop:save';
     app.commands.addCommand(saveCommand, {
       label: '保存',
       caption: 'Notebookファイルを上書き保存',
@@ -230,16 +230,16 @@ const plugin: JupyterFrontEndPlugin<void> = {
     if (launcher) {
       try {
         launcher.add({
-          command: 'jupyterlab-angular-demo:open',
+          command: 'jupyter-desktop:open',
           category: 'Notebook',
           rank: 1
         });
-        console.log('jupyterlab-angular-demo: Added to launcher successfully');
+        console.log('jupyter-desktop: Added to launcher successfully');
       } catch (error) {
-        console.error('jupyterlab-angular-demo: Error adding to launcher:', error);
+        console.error('jupyter-desktop: Error adding to launcher:', error);
       }
     } else {
-      console.warn('jupyterlab-angular-demo: ILauncher is not available, skipping launcher registration');
+      console.warn('jupyter-desktop: ILauncher is not available, skipping launcher registration');
     }
 
     // ipynbファイルタイプのハンドラーを登録
@@ -253,7 +253,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
         const content = new AngularWidget(app, docManager, context);
         const widget = new DocumentWidget({ content, context });
         widget.id = `angular-widget-${context.path}`;
-        widget.title.label = context.path.split('/').pop() || 'Angular Panel';
+        widget.title.label = context.path.split('/').pop() || 'Desktop';
         widget.title.closable = true;
         
         // 未保存状態の時に×ボタンを●に変更
@@ -284,7 +284,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
     }
 
     const factory = new AngularWidgetFactory({
-      name: 'Angular Panel',
+      name: 'Desktop',
       modelName: 'notebook',
       fileTypes: ['notebook'],
       defaultFor: ['notebook']
@@ -299,9 +299,9 @@ const plugin: JupyterFrontEndPlugin<void> = {
     app.docRegistry.defaultWidgetFactory = (fileType: string) => {
       if (fileType === 'notebook') {
         // AngularWidget ファクトリを取得
-        const angularFactory = app.docRegistry.getWidgetFactory('Angular Panel');
+        const angularFactory = app.docRegistry.getWidgetFactory('Desktop');
         if (angularFactory) {
-          console.log('defaultWidgetFactory: Returning Angular Panel for notebook');
+          console.log('defaultWidgetFactory: Returning Desktop for notebook');
           return angularFactory;
         }
       }
@@ -320,9 +320,9 @@ const plugin: JupyterFrontEndPlugin<void> = {
           console.log('docmanager:open path:', path);
           if (path && (path.endsWith('.ipynb') || path.endsWith('.ipynb/'))) {
             console.log('docmanager:open intercepted for notebook:', path);
-            // widgetNameを'Angular Panel'に指定して開く
-            const newArgs = { ...args, widgetName: 'Angular Panel' };
-            console.log('docmanager:open calling with widgetName: Angular Panel');
+            // widgetNameを'Desktop'に指定して開く
+            const newArgs = { ...args, widgetName: 'Desktop' };
+            console.log('docmanager:open calling with widgetName: Desktop');
             return originalOpenCommand('docmanager:open', newArgs);
           }
         }
@@ -341,12 +341,12 @@ const plugin: JupyterFrontEndPlugin<void> = {
         docManagerAny.open = async (path: string, widgetName?: string, kernel?: any, options?: any) => {
           // notebookファイルの場合
           if (path && (path.endsWith('.ipynb') || path.endsWith('.ipynb/'))) {
-            // widgetNameが指定されていない、またはEditor/Notebookの場合、Angular Panelを使用
+            // widgetNameが指定されていない、またはEditor/Notebookの場合、Desktopを使用
             if (!widgetName || widgetName === 'Editor' || widgetName === 'Notebook') {
-              console.log('DocumentManager.open intercepted for notebook:', path, ', widgetName:', widgetName, ', forcing Angular Panel');
-              // widgetNameを'Angular Panel'に指定して開く
-              const result = await originalOpen(path, 'Angular Panel', kernel, options);
-              console.log('DocumentManager.open: Result after forcing Angular Panel:', result);
+              console.log('DocumentManager.open intercepted for notebook:', path, ', widgetName:', widgetName, ', forcing Desktop');
+              // widgetNameを'Desktop'に指定して開く
+              const result = await originalOpen(path, 'Desktop', kernel, options);
+              console.log('DocumentManager.open: Result after forcing Desktop:', result);
               return result;
             }
           }
@@ -363,12 +363,12 @@ const plugin: JupyterFrontEndPlugin<void> = {
           console.log('DocumentManager.openOrReveal called with path:', path, ', widgetName:', widgetName);
           // notebookファイルの場合
           if (path && (path.endsWith('.ipynb') || path.endsWith('.ipynb/'))) {
-            // widgetNameが指定されていない、またはEditor/Notebookの場合、Angular Panelを使用
+            // widgetNameが指定されていない、またはEditor/Notebookの場合、Desktopを使用
             if (!widgetName || widgetName === 'Editor' || widgetName === 'Notebook') {
-              console.log('DocumentManager.openOrReveal intercepted for notebook:', path, ', widgetName:', widgetName, ', forcing Angular Panel');
-              // widgetNameを'Angular Panel'に指定して開く
-              const result = await originalOpenOrReveal(path, 'Angular Panel', kernel, options);
-              console.log('DocumentManager.openOrReveal: Result after forcing Angular Panel:', result);
+              console.log('DocumentManager.openOrReveal intercepted for notebook:', path, ', widgetName:', widgetName, ', forcing Desktop');
+              // widgetNameを'Desktop'に指定して開く
+              const result = await originalOpenOrReveal(path, 'Desktop', kernel, options);
+              console.log('DocumentManager.openOrReveal: Result after forcing Desktop:', result);
               return result;
             }
           }
@@ -384,8 +384,8 @@ const plugin: JupyterFrontEndPlugin<void> = {
     // setDefaultWidgetFactory APIを適切なタイミングで呼び出す
     setTimeout(() => {
       try {
-        app.docRegistry.setDefaultWidgetFactory('notebook', 'Angular Panel');
-        console.log('Called setDefaultWidgetFactory for notebook -> Angular Panel');
+        app.docRegistry.setDefaultWidgetFactory('notebook', 'Desktop');
+        console.log('Called setDefaultWidgetFactory for notebook -> Desktop');
         
         // 確認
         const defaultFactory = app.docRegistry.defaultWidgetFactory('notebook');
@@ -395,7 +395,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
       }
     }, 100);
 
-    console.log('jupyterlab-angular-demo: Angular Panel拡張機能が有効になりました');
+    console.log('jupyter-desktop: Desktop拡張機能が有効になりました');
   }
 };
 
