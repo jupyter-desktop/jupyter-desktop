@@ -1,2 +1,14 @@
 migrated
 anaconda_projects/
+*.sqlite
+
+# Python
+__pycache__/
+
+# Environment
+.env
+
+# Cache
+*.duckdb
+*.duckdb.wal
+e_api_login_cache.json
