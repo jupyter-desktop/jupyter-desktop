@@ -70,7 +70,6 @@ export class IpyflowCommService {
       // これにより、IPyflowのCommターゲットが登録される
       try {
         await this.loadIpyflowExtension(kernel);
-        console.log('[IPyflow] Extension loaded');
       } catch (error) {
         console.warn('[IPyflow] Failed to load extension (may already be loaded):', error);
         // 拡張機能が既にロードされている場合はエラーを無視
@@ -90,7 +89,6 @@ export class IpyflowCommService {
           if (payload['type'] === 'establish') {
             const establishMsg = payload as IpyflowEstablishMessage;
             this.isConnected = true;
-            console.log('[IPyflow] Connected', establishMsg.success ? '(success)' : '');
           } else if (payload['type'] === 'compute_exec_schedule') {
             const scheduleMsg = payload as IpyflowComputeExecScheduleResponse;
             // ready_cellsを通知

@@ -51,7 +51,6 @@ except Exception as e:
       
       // 実行結果から出力を取得（簡易版: 実際の実装ではOutputServiceから取得する必要がある）
       // 注意: この実装は簡易版のため、実際の出力取得は後で改善する必要がある
-      console.log('[IpyflowApiService] getDependencies result:', result);
       
       // TODO: 実際の出力を取得してパースする
       // 現時点では空配列を返す（実装を段階的に進める）
@@ -88,7 +87,6 @@ except Exception as e:
       const result = await this.executionService.runPython(code);
       
       // 実行結果から出力を取得（簡易版: 実際の実装ではOutputServiceから取得する必要がある）
-      console.log('[IpyflowApiService] getUsers result:', result);
       
       // TODO: 実際の出力を取得してパースする
       // 現時点では空配列を返す（実装を段階的に進める）

@@ -96,7 +96,6 @@ export class NotebookService {
       }
 
       const restoredWindows = notebookToWindows(notebook);
-      console.log('ローカルストレージから前回の状態を復元しました。');
       return restoredWindows;
     } catch (error: any) {
       console.error('ローカルストレージからの復元に失敗しました:', error);
@@ -159,14 +158,12 @@ export class NotebookService {
       const result = await this.electronService.saveFile(jsonContent);
       
       if (result.success) {
-        console.log(`全てのウィンドウ情報を保存しました: ${result.filePath}`);
         return { success: true, filePath: result.filePath };
       } else if (result.error) {
         console.error(`保存エラー: ${result.error}`);
         return { success: false, error: result.error };
       } else {
         // キャンセルされた場合
-        console.log('保存がキャンセルされました');
         return { success: false };
       }
     } catch (error: any) {

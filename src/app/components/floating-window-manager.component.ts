@@ -282,9 +282,6 @@ export class FloatingWindowManagerComponent implements OnInit, AfterViewInit, On
               showEmptyConfirm: true,
               showSuccessAlert: true,
             });
-            if (restoredCount === 0) {
-              console.log('全てのウィンドウを削除しました');
-            }
           } else if (result.error) {
             alert(`ファイルの読み込みに失敗しました: ${result.error}`);
           }
@@ -307,7 +304,6 @@ export class FloatingWindowManagerComponent implements OnInit, AfterViewInit, On
       // カーネルが準備完了してからIPyflow Commを初期化
       if (this.pythonRuntime.isReady()) {
         await this.ipyflowComm.initialize();
-        console.log('[FloatingWindowManager] IPyflow Comm initialized');
       } else {
         // カーネルが準備できていない場合、準備完了を待つ
         const maxWaitTime = 15000;
@@ -321,7 +317,6 @@ export class FloatingWindowManagerComponent implements OnInit, AfterViewInit, On
           await new Promise(resolve => setTimeout(resolve, 200));
         }
         await this.ipyflowComm.initialize();
-        console.log('[FloatingWindowManager] IPyflow Comm initialized');
       }
     } catch (error) {
       console.error('[FloatingWindowManager] IPyflow Comm initialization failed:', error);
@@ -355,9 +350,8 @@ export class FloatingWindowManagerComponent implements OnInit, AfterViewInit, On
         const windowComponent = componentRef.instance;
         if (windowComponent instanceof FloatingEditorWindowComponent) {
           windowComponent.syncEditorContent();
-        } else if (windowComponent instanceof FloatingInfoWindowComponent) {
-          windowComponent.syncMarkdownContent();
         }
+        // FloatingInfoWindowComponentは自動的にコンテンツを管理するため、同期は不要
       } catch (error) {
         console.error(`ウィンドウ情報の同期に失敗しました (ID: ${windowId}):`, error);
       }
@@ -404,7 +398,6 @@ export class FloatingWindowManagerComponent implements OnInit, AfterViewInit, On
     this.hasInitialized = true;
 
     if (restoredWindows.length === 0) {
-      console.log('全てのウィンドウを削除しました');
       return 0;
     }
 
@@ -464,7 +457,6 @@ export class FloatingWindowManagerComponent implements OnInit, AfterViewInit, On
     this.ensureConsolePairsForEditors();
 
     const restoredCount = restoredWindowIds.length;
-    console.log(`${restoredCount}個のウィンドウを復元しました`);
 
     if (showSuccessAlert && restoredCount > 0) {
       alert(successMessage ?? `${restoredCount}個のウィンドウを復元しました`);
@@ -486,10 +478,9 @@ export class FloatingWindowManagerComponent implements OnInit, AfterViewInit, On
       const expectedConsoleId = `${editor.id}-console`;
       if (!consoleWindowIds.has(expectedConsoleId)) {
         // 対応するコンソールが存在しないので作成
-        console.log(`エディタ ${editor.id} に対応するコンソールが存在しないため、作成します`);
         this.windowManager.restoreWindow({
           id: expectedConsoleId,
-          title: `${editor.title} - Console`,
+          title: editor.title,
           x: editor.x + 30,
           y: editor.y + 30,
           width: 700,
@@ -692,7 +683,7 @@ export class FloatingWindowManagerComponent implements OnInit, AfterViewInit, On
    */
   private createInitialInfoWindows(): void {
     const editorWindowId = this.windowManager.createWindow('main', '', false, undefined, 'editor');
-    // const informationWindowId = this.windowManager.createWindow('', 'introduction.html', false, undefined, 'info');
+    const informationWindowId = this.windowManager.createWindow('', 'introduction.html', false, undefined, 'info');
   }
 
   /**
@@ -731,7 +722,6 @@ export class FloatingWindowManagerComponent implements OnInit, AfterViewInit, On
     try {
       await this.executionService.resetSession();
       // 成功メッセージを表示（オプション）
-      console.log('[FloatingWindowManager] セッションがリセットされました');
       // 必要に応じて、ユーザーに通知するUIを追加
     } catch (error) {
       console.error('[FloatingWindowManager] セッションリセット失敗:', error);

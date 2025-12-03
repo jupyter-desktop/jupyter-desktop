@@ -15,7 +15,7 @@ import { ExecutionState, ExecutionService } from '../services/python-runtime/exe
 import { OutputService, RuntimeOutput } from '../services/python-runtime/output.service';
 import { RichOutputRendererService } from '../services/python-runtime/rich-output-renderer.service';
 import { SafeHtml } from '@angular/platform-browser';
-import { Subscription, combineLatest } from 'rxjs';
+import { Subscription, combineLatest, pairwise, startWith } from 'rxjs';
 
 /**
  * FloatingConsoleWindowComponent
@@ -52,7 +52,7 @@ import { Subscription, combineLatest } from 'rxjs';
     <div class="window-titlebar" (mousedown)="onTitleBarMouseDown($event)">
       <div class="titlebar-left">
         <span class="window-title">{{ window.title }}</span>
-        <span class="window-status" [class.running]="isRunning">{{ isRunning ? '実行中...' : 'Ready' }}</span>
+        <!-- <span class="window-status" [class.running]="isRunning">{{ isRunning ? '実行中...' : 'Ready' }}</span> -->
       </div>
       <div class="titlebar-buttons">
         <button class="titlebar-btn" (click)="minimizeWindow()" title="Minimize">
@@ -67,7 +67,6 @@ import { Subscription, combineLatest } from 'rxjs';
       <div class="console-output" #consoleOutput>
         @for (output of filteredOutputs; track $index) {
           <div class="console-line" [class]="'console-' + output.type">
-            <span class="console-time">{{ formatTime(output.timestamp) }}</span>
             @if (isRichOutput(output)) {
               <div class="console-content rich-output" [innerHTML]="renderOutput(output)"></div>
             } @else {
@@ -260,7 +259,10 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
   private contentResizeObserver: ResizeObserver | null = null;
   private mutationObserver: MutationObserver | null = null;
   private imageLoadListeners = new Map<HTMLImageElement, () => void>();
+  private executedScripts = new Set<string>(); // 実行済みスクリプトのIDを追跡
   private autoResizeEnabled = true;
+  private autoResizeState: 'idle' | 'pending' | 'running' | 'done' = 'idle';
+  private hasUserManuallyResized = false; // ユーザーが手動でリサイズしたかを追跡
   
   // 自動リサイズの制約値
   private readonly MIN_WINDOW_HEIGHT = 200;
@@ -271,6 +273,8 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
   private readonly CONTENT_PADDING = 16; // コンテンツのパディング（上下8px × 2）
   private readonly DEFAULT_IMAGE_WIDTH = 650; // 画像表示時のデフォルト幅
   private readonly DEFAULT_IMAGE_HEIGHT = 500; // 画像表示時のデフォルト高さ
+  private readonly IMAGE_LOAD_TIMEOUT_MS = 1500; // 画像読み込み待機の上限
+  private readonly INITIAL_LAYOUT_DELAY_MS = 120; // レイアウト安定化のための追加待機
 
   get window() {
     return this.windowManager.getWindow(this.windowId) || {
@@ -291,7 +295,6 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
    */
   get filteredOutputs(): RuntimeOutput[] {
     // [IPyflow DEBUG]で始まるデバッグメッセージを非表示にする
-    console.log('filteredOutputs', this.outputs);
     return this.outputs.filter(output => {
       const content = output.content || '';
       return !content.trim().startsWith('[IPyflow DEBUG]');
@@ -299,6 +302,11 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
   }
 
   ngAfterViewInit(): void {
+    // ウィンドウ要素を登録
+    if (this.consolePanelRef?.nativeElement) {
+      this.windowManager.registerWindowElement(this.windowId, this.consolePanelRef.nativeElement);
+    }
+    
     // Pythonランタイムの状態/出力を購読
     Promise.resolve().then(() => {
       const windowData = this.windowManager.getWindow(this.windowId);
@@ -306,17 +314,44 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
       const output$ = this.editorId
         ? this.outputService.getOutput$(this.editorId)
         : this.outputService.output$;
+      // ウィンドウごとの実行状態を取得（editorIdがある場合）
+      const executionState$ = this.editorId
+        ? this.executionService.getWindowExecutionState$(this.editorId)
+        : this.executionService.executionState$;
+      
+      // 実行状態遷移を検出するために、pairwiseを使用
+      const executionStateWithPrevious$ = executionState$.pipe(
+        startWith(this.latestExecutionState), // 初期値を設定
+        pairwise() // [previous, current]のペアを生成
+      );
+      
       this.viewModelSubscription = combineLatest([
         output$,
-        this.executionService.executionState$
-      ]).subscribe(([outputs, executionState]) => {
+        executionState$,
+        executionStateWithPrevious$
+      ]).subscribe(([outputs, executionState, [previousState, currentState]]) => {
         this.outputs = outputs;
         this.isRunning = executionState === 'running';
-        this.latestExecutionState = executionState;
+        
+        // 実行状態の遷移を検出
+        const isExecutionCompleted = previousState === 'running' && currentState === 'idle';
+        
+        // 実行完了時、または出力が追加された時に自動リサイズをスケジュール
+        // ただし、ユーザーが手動でリサイズしていない場合のみ
+        if (isExecutionCompleted && outputs.length > 0 && !this.hasUserManuallyResized) {
+          // 画像出力がある場合は、MutationObserverとobserveImageLoadで画像が追加・読み込み完了した時にリサイズが実行される
+          // テキスト出力のみの場合は即座にリサイズを実行
+          const hasImageOutput = outputs.some(o => o.mimeType && o.mimeType.startsWith('image/'));
+          if (!hasImageOutput) {
+            this.scheduleAutoResize();
+          }
+        }
+        
+        this.latestExecutionState = currentState;
 
         this.scheduleConsoleScroll();
-        // 出力が変更されたら自動リサイズをスケジュール
-        this.scheduleAutoResize();
+        // 出力が変更されたらスクリプトを実行（DOM更新後に実行）
+        this.scheduleScriptExecution();
         this.cdr.markForCheck();
       });
 
@@ -391,6 +426,12 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
   }
 
   onResizeMouseDown(event: MouseEvent): void {
+    // ユーザーが手動でリサイズを開始したことを検出
+    if (!this.hasUserManuallyResized) {
+      this.hasUserManuallyResized = true;
+      // 以降の自動リサイズを無効化
+      this.autoResizeEnabled = false;
+    }
     this.windowManager.startResize(event, this.windowId, this.consolePanelRef);
   }
 
@@ -403,6 +444,8 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
   }
   
   ngOnDestroy(): void {
+    // ウィンドウ要素の登録を解除
+    this.windowManager.unregisterWindowElement(this.windowId);
     if (this.viewModelSubscription) {
       this.viewModelSubscription.unsubscribe();
     }
@@ -462,15 +505,14 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
         return;
       }
 
-      this.contentResizeObserver = new ResizeObserver((entries) => {
-        if (!this.autoResizeEnabled) {
+      this.contentResizeObserver = new ResizeObserver(() => {
+        if (!this.autoResizeEnabled || this.hasUserManuallyResized) {
           return;
         }
 
-        // リサイズが発生した場合、画像サイズも含めて全体を再計算
-        // 画像の読み込み完了を待つため、少し遅延させて実行
+        // リサイズが発生した場合、自動リサイズを再度確認
         setTimeout(() => {
-          this.performAutoResize();
+          this.scheduleAutoResize();
         }, 50);
       });
 
@@ -572,24 +614,191 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
   }
 
   /**
-   * 自動リサイズをスケジュール（出力変更後に実行）
+   * スクリプト実行をスケジュール（出力変更後に実行）
+   * Angularの変更検出サイクルが完了した後、さらに遅延させて実行
    */
-  private scheduleAutoResize(): void {
-    if (!this.autoResizeEnabled) {
-      return;
-    }
-
-    // 次のフレームでリサイズを実行
+  private scheduleScriptExecution(): void {
+    // 複数のフレームを待ってから実行（DOM要素が確実に存在することを確認）
     Promise.resolve().then(() => {
       if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+        // 最初のフレームで変更検出が完了するのを待つ
         window.requestAnimationFrame(() => {
-          this.performAutoResize();
+          // 2回目のフレームでDOM要素が確実に存在することを確認
+          window.requestAnimationFrame(() => {
+            // さらに少し遅延させてスクリプトを実行（チャートコンテナが存在することを確認）
+            setTimeout(() => {
+              this.executeModuleScriptsInContainer();
+            }, 100);
+          });
         });
       } else {
         setTimeout(() => {
-          this.performAutoResize();
-        }, 0);
+          this.executeModuleScriptsInContainer();
+        }, 200);
       }
+    });
+  }
+  
+  /**
+   * コンテナ内のスクリプトを実行
+   */
+  private executeModuleScriptsInContainer(): void {
+    const outputElement = this.consoleOutputRef?.nativeElement;
+    if (!outputElement) {
+      return;
+    }
+    this.executeModuleScripts(outputElement);
+  }
+
+  /**
+   * 自動リサイズをスケジュール（出力変更後に実行）
+   */
+  private scheduleAutoResize(): void {
+    if (!this.autoResizeEnabled || this.autoResizeState !== 'idle' || this.hasUserManuallyResized) {
+      return;
+    }
+
+    this.autoResizeState = 'pending';
+    void this.runInitialAutoResize();
+  }
+
+  private async runInitialAutoResize(): Promise<void> {
+    if (this.autoResizeState !== 'pending') {
+      return;
+    }
+
+    this.autoResizeState = 'running';
+    await this.waitForAnimationFrames(2);
+
+    const outputElement = this.consoleOutputRef?.nativeElement;
+    if (!outputElement) {
+      this.finishAutoResize();
+      return;
+    }
+
+    await this.waitForImagesToLoad(outputElement);
+    await this.waitForAnimationFrames(1);
+    await this.delay(this.INITIAL_LAYOUT_DELAY_MS);
+
+    if (this.autoResizeState !== 'running') {
+      return;
+    }
+
+    try {
+      this.performAutoResize();
+    } finally {
+      this.finishAutoResize();
+    }
+  }
+
+  private finishAutoResize(): void {
+    this.autoResizeState = 'idle'; // 次のリサイズが可能な状態に戻す
+    // ユーザーが手動でリサイズしていない場合は、自動リサイズを継続
+    if (this.hasUserManuallyResized) {
+      this.autoResizeEnabled = false;
+    } else {
+      // ユーザーが手動でリサイズしていない場合は、自動リサイズを有効のままにする
+      this.autoResizeEnabled = true;
+    }
+  }
+
+  private waitForAnimationFrames(frames: number): Promise<void> {
+    if (frames <= 0) {
+      return Promise.resolve();
+    }
+
+    if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+      return new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+    }
+
+    return new Promise((resolve) => {
+      let remaining = frames;
+      const step = () => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          resolve();
+        } else {
+          window.requestAnimationFrame(step);
+        }
+      };
+      window.requestAnimationFrame(step);
+    });
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      if (typeof window !== 'undefined') {
+        window.setTimeout(resolve, ms);
+      } else {
+        setTimeout(resolve, ms);
+      }
+    });
+  }
+
+  private waitForImagesToLoad(container: HTMLElement): Promise<void> {
+    if (typeof window === 'undefined') {
+      return Promise.resolve();
+    }
+
+    const images = Array.from(container.querySelectorAll('img'));
+    const pendingImages = images.filter(img => !img.complete);
+
+    if (pendingImages.length === 0) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      let remaining = pendingImages.length;
+      let timeoutId: number | null = null;
+      const cleanupHandlers: Array<() => void> = [];
+
+      const cleanup = () => {
+        cleanupHandlers.forEach(fn => fn());
+        cleanupHandlers.length = 0;
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+      };
+
+      const maybeFinish = () => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          cleanup();
+          resolve();
+        }
+      };
+
+      pendingImages.forEach((img) => {
+        if (img.complete) {
+          remaining -= 1;
+          return;
+        }
+
+        const handler = () => {
+          maybeFinish();
+        };
+
+        img.addEventListener('load', handler, { once: true });
+        img.addEventListener('error', handler, { once: true });
+        cleanupHandlers.push(() => {
+          img.removeEventListener('load', handler);
+          img.removeEventListener('error', handler);
+        });
+      });
+
+      if (remaining <= 0) {
+        cleanup();
+        resolve();
+        return;
+      }
+
+      timeoutId = window.setTimeout(() => {
+        cleanup();
+        resolve();
+      }, this.IMAGE_LOAD_TIMEOUT_MS);
     });
   }
 
@@ -597,7 +806,7 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
    * 自動リサイズを実行
    */
   private performAutoResize(): void {
-    if (!this.autoResizeEnabled) {
+    if (!this.autoResizeEnabled || this.hasUserManuallyResized) {
       return;
     }
 
@@ -606,6 +815,10 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
       return;
     }
 
+    const observer = this.contentResizeObserver;
+    if (observer) {
+      observer.disconnect();
+    }
     // 画像要素の自然サイズを取得
     const images = outputElement.querySelectorAll('img');
     let hasImage = false;
@@ -672,8 +885,10 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
 
       this.mutationObserver = new MutationObserver((mutations) => {
         let hasNewImages = false;
+        let hasNewScripts = false;
         
         mutations.forEach((mutation) => {
+          // 追加されたノードをチェック
           mutation.addedNodes.forEach((node) => {
             if (node.nodeType === Node.ELEMENT_NODE) {
               const element = node as HTMLElement;
@@ -691,12 +906,36 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
                   this.observeImageLoad(img);
                 });
               }
+              
+              // scriptタグを検索
+              if (element.tagName === 'SCRIPT') {
+                hasNewScripts = true;
+              } else {
+                const moduleScripts = element.querySelectorAll('script');
+                if (moduleScripts.length > 0) {
+                  hasNewScripts = true;
+                }
+              }
             }
           });
         });
         
+        // 新しいスクリプトが追加された場合、少し遅延させてから実行
+        // DOM要素が確実に存在することを確認するため
+        if (hasNewScripts && outputElement) {
+          setTimeout(() => {
+            this.executeModuleScripts(outputElement);
+          }, 200);
+        }
+        
         // 新しい画像が追加された場合、リサイズをスケジュール
-        if (hasNewImages) {
+        // ただし、ユーザーが手動でリサイズしていない場合のみ
+        if (hasNewImages && !this.hasUserManuallyResized) {
+          // autoResizeEnabledがfalseの場合は、再度有効化してリサイズを実行
+          if (!this.autoResizeEnabled) {
+            this.autoResizeEnabled = true;
+            this.autoResizeState = 'idle';
+          }
           this.scheduleAutoResize();
         }
       });
@@ -712,7 +951,109 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
       existingImages.forEach((img: HTMLImageElement) => {
         this.observeImageLoad(img);
       });
+      
+      // 既存のスクリプトタグも実行
+      this.executeModuleScripts(outputElement);
     });
+  }
+
+  /**
+   * innerHTMLで挿入された<script>タグを実行
+   * type="module"とプレーンなスクリプトの両方に対応する
+   */
+  private executeModuleScripts(container: HTMLElement): void {
+    const scripts = Array.from(container.querySelectorAll('script'));
+    
+    scripts.forEach((scriptElement) => {
+      const script = scriptElement as HTMLScriptElement;
+      const scriptContent = script.textContent || script.innerHTML || '';
+      const hasInlineContent = scriptContent.trim().length > 0;
+      const srcAttr = script.getAttribute('src');
+      const hasSrc = !!(srcAttr && srcAttr.trim().length > 0);
+      
+      if (!hasInlineContent && !hasSrc) {
+        return; // 実行対象がない場合はスキップ
+      }
+      
+      // スクリプトのハッシュ値を生成（重複実行を防ぐ）
+      const scriptSource = hasSrc ? srcAttr! : scriptContent;
+      const scriptId = this.hashString(`${hasSrc ? 'src:' : 'inline:'}${scriptSource}`);
+      
+      // 既に実行済みの場合はスキップ
+      if (this.executedScripts.has(scriptId)) {
+        return;
+      }
+      // 新しいscriptタグを作成して実行
+      // innerHTMLで挿入されたscriptタグは実行されないため、
+      // 新しいscriptタグを作成してDOMに追加する必要がある
+      const newScript = document.createElement('script');
+      
+      if (script.type) {
+        newScript.type = script.type;
+      }
+      
+      // 既存属性を移植（type/srcは別途設定）
+      script.getAttributeNames().forEach((attr) => {
+        if (attr === 'type' || attr === 'src') {
+          return;
+        }
+        const value = script.getAttribute(attr);
+        if (value !== null) {
+          newScript.setAttribute(attr, value);
+        }
+      });
+      
+      if (hasSrc && srcAttr) {
+        newScript.src = srcAttr;
+      } else {
+        newScript.textContent = scriptContent;
+      }
+      
+      // スクリプトの実行完了を待つ（エラーハンドリング付き）
+      const errorHandler = (event: ErrorEvent) => {
+        console.error('Module script execution error:', event.error);
+        return false; // 他のエラーハンドラーにも伝播させる
+      };
+      
+      // エラーハンドラーを一時的に設定
+      window.addEventListener('error', errorHandler, { once: true });
+      
+      // 親要素に追加して実行
+      // document.bodyに追加すると、グローバルスコープで実行され、
+      // かつ、DOM要素を参照できる
+      // コンテナ内の要素を参照できるように、document.bodyに追加
+      const parent = document.body;
+      
+      // scriptタグを追加
+      parent.appendChild(newScript);
+      
+      // 実行済みとしてマーク
+      this.executedScripts.add(scriptId);
+      
+      // 元のスクリプトタグは空にする（実行済みなので不要）
+      // DOM構造を保つため、削除せずに空にする
+      script.textContent = '';
+      script.removeAttribute('type');
+      script.removeAttribute('src');
+      
+      // クリーンアップ（エラーハンドラーを削除）
+      setTimeout(() => {
+        window.removeEventListener('error', errorHandler);
+      }, 1000);
+    });
+  }
+  
+  /**
+   * 文字列のハッシュ値を生成（スクリプトの重複検出用）
+   */
+  private hashString(str: string): string {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash.toString();
   }
 
   /**
@@ -726,14 +1067,25 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
 
     const handleLoad = () => {
       // 画像の読み込み完了後、リサイズをスケジュール
+      // ただし、ユーザーが手動でリサイズしていない場合のみ
+      if (this.hasUserManuallyResized) {
+        return;
+      }
+      // autoResizeEnabledがfalseの場合は、再度有効化してリサイズを実行
+      if (!this.autoResizeEnabled) {
+        this.autoResizeEnabled = true;
+        this.autoResizeState = 'idle';
+      }
       setTimeout(() => {
         this.scheduleAutoResize();
       }, 100);
     };
 
     const handleError = () => {
-      // エラー時もリサイズを試みる
-      this.scheduleAutoResize();
+      // エラー時もリサイズを試みる（ただし、ユーザーが手動でリサイズしていない場合のみ）
+      if (!this.hasUserManuallyResized) {
+        this.scheduleAutoResize();
+      }
     };
 
     if (img.complete) {

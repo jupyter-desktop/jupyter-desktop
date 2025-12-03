@@ -168,11 +168,9 @@ export class OutputService {
     if (!filtered) {
       return;
     }
-    console.log(`[OutputService] [DEBUG] appendOutput: editorId=${editorId}, content=${output.content.substring(0, 50)}, type=${output.type}`);
     if (editorId) {
       const target = this.getOrCreateOutputSubject(editorId);
       target.next([...target.value, filtered]);
-      console.log(`[OutputService] [DEBUG] Output appended to editorId=${editorId}, current output count=${target.value.length}`);
     }
     const current = this.globalOutputSubject.value;
     this.globalOutputSubject.next([...current, filtered]);
@@ -205,19 +203,11 @@ export class OutputService {
     const requestId = message.header.msg_id;
     const executionId = parentHeader?.msg_id || requestId;
 
-    // デバッグログ: すべてのメッセージをログに記録
-    if (msgType === 'stream' || event === 'stream' || msgType === 'execute_result' || msgType === 'execute_input') {
-      console.log(`[OutputService] [DEBUG] handleServerMessage: event=${event}, type=${msgType}`);
-    }
-
     // iopubチャンネルのメッセージのみ処理（重複防止）
     if (event !== 'iopub' && event !== 'shell' && event !== 'control' && event !== 'stdin') {
       // 旧イベント名（stdout, stderr, result, error）の場合は後で処理
       // その他のイベントは無視
       if (!['stdout', 'stderr', 'result', 'error'].includes(event)) {
-        if (msgType === 'stream' || msgType === 'execute_result') {
-          console.log(`[OutputService] [DEBUG] handleServerMessage: Ignoring message with event=${event}, type=${msgType}`);
-        }
         return;
       }
     }
@@ -231,10 +221,6 @@ export class OutputService {
           const isReexecution = metadata?.is_reexecution || false;
           const metadataEditorId = metadata?.editor_id;
           const editorId = metadataEditorId || this.executionService.resolveEditorId(executionId, requestId, content);
-          
-          if (isReexecution && metadataEditorId) {
-            console.log(`[OutputService] [DEBUG] Re-execution detected for editor: ${metadataEditorId}`);
-          }
           
           this.appendOutput({
             type: 'stdout',
@@ -254,8 +240,6 @@ export class OutputService {
           const metadataEditorId = metadata?.editor_id;
           const resolvedEditorId = this.executionService.resolveEditorId(executionId, requestId, content);
           const editorId = metadataEditorId || resolvedEditorId;
-          
-          console.log(`[OutputService] [DEBUG] stream message: name=${name}, text=${text.substring(0, 50)}, metadata.editor_id=${metadataEditorId}, resolvedEditorId=${resolvedEditorId}, finalEditorId=${editorId}, executionId=${executionId}, requestId=${requestId}`);
           
           this.appendOutput({
             type: name === 'stderr' ? 'stderr' : 'stdout',
