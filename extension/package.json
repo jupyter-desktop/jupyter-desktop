@@ -1,0 +1,58 @@
+{
+  "name": "jupyterlab-angular-demo",
+  "version": "0.1.0",
+  "description": "Angular × JupyterLab Extension Demo",
+  "keywords": [
+    "jupyter",
+    "jupyterlab",
+    "jupyterlab-extension",
+    "angular"
+  ],
+  "license": "BSD-3-Clause",
+  "files": [
+    "../dist/jupyter-desktop/**/*.{js,js.map,css}",
+    "style/**/*.{css,svg}"
+  ],
+  "main": "../dist/jupyter-desktop/remoteEntry.js",
+  "jupyterlab": {
+    "extension": true,
+    "outputDir": "../dist/jupyter-desktop",
+    "webpackConfig": "./webpack.config.js",
+    "_build": {
+      "load": "static/remoteEntry.js",
+      "extension": "./extension"
+    }
+  },
+  "scripts": {
+    "build": "node build.js",
+    "build:prod": "node build.js",
+    "build:labextension": "jupyter labextension build .",
+    "watch": "node build.js --watch",
+    "clean": "rimraf ../dist/jupyter-desktop/*.js ../dist/jupyter-desktop/*.map"
+  },
+  "dependencies": {
+    "@jupyterlab/application": "^4.0.0",
+    "@jupyterlab/apputils": "^4.0.0",
+    "@jupyterlab/coreutils": "^6.0.0",
+    "@jupyterlab/docmanager": "^4.0.0",
+    "@jupyterlab/docregistry": "^4.0.0",
+    "@jupyterlab/launcher": "^4.0.0",
+    "@jupyterlab/notebook": "^4.0.0",
+    "@jupyterlab/services": "^7.0.0",
+    "@jupyterlab/ui-components": "^4.0.0",
+    "@lumino/coreutils": "^2.0.0",
+    "@lumino/disposable": "^2.0.0",
+    "@lumino/signaling": "^2.0.0",
+    "@lumino/widgets": "^2.0.0"
+  },
+  "devDependencies": {
+    "copy-webpack-plugin": "^11.0.0",
+    "css-loader": "^7.1.2",
+    "rimraf": "^5.0.0",
+    "style-loader": "^4.0.0",
+    "ts-loader": "^9.4.2",
+    "typescript": "^5.4.0",
+    "webpack": "^5.88.1",
+    "webpack-cli": "^5.1.4"
+  }
+}

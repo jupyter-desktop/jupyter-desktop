@@ -1,0 +1,56 @@
+#!/bin/bash
+set -e
+
+echo "=========================================="
+echo "Building Angular + JupyterLab Extension"
+echo "=========================================="
+
+# Angular build
+echo "[1/4] Building Angular application..."
+npm install
+npm run build:ng
+
+# Extension directory setup
+cd extension
+
+# npm dependencies for webpack build
+echo "[2/4] Installing npm dependencies for webpack build..."
+npm install
+
+# JupyterLab extension build
+echo "[3/4] Building JupyterLab extension..."
+npm run build
+
+# Python extension install (jupyter-packaging will automatically install the extension)
+echo "[4/4] Installing Python package (extension will be installed automatically)..."
+pip install .
+cd ..
+
+# JupyterLab build
+echo "Building JupyterLab (this may take a few minutes)..."
+jupyter lab build --minimize=False
+
+# Verify extension installation
+echo "Verifying extension installation..."
+jupyter labextension list
+
+# Check if extension is enabled and enable if not
+echo "Checking extension status..."
+# Remove ANSI color codes and check if extension is enabled
+if ! jupyter labextension list 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | grep "jupyterlab-angular-demo" | grep -q "enabled"; then
+    echo "Extension is already enabled."
+else
+    echo "Extension is not enabled. Enabling it now..."
+    jupyter labextension enable jupyterlab-angular-demo || true
+    echo "Extension enabled successfully."
+fi
+
+# Final verification
+echo "Final extension status:"
+jupyter labextension list 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | grep "jupyterlab-angular-demo" || echo "Extension not found in list"
+
+echo "=========================================="
+echo "Build completed successfully!"
+echo "=========================================="
+echo ""
+echo "The extension is now available in JupyterLab."

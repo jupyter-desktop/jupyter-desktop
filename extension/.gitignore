@@ -1,0 +1,9 @@
+static/
+.yarn/
+.pnp*
+lib/
+
+# Node
+/node_modules
+
+*.egg-info
