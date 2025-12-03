@@ -9,6 +9,9 @@ Jupyter Server 設定ファイル
 - XSRF保護の無効化: 開発環境用
 """
 
+import os
+import sys
+from pathlib import Path
 from traitlets.config import get_config
 
 c = get_config()
@@ -29,9 +32,8 @@ c.ServerApp.open_browser = False
 c.ServerApp.disable_check_xsrf = True
 
 # WebSocket接続の設定
-# Jupyter Server 2.x では、WebSocket接続時に認証が必要な場合がある
-# トークンが空の場合でも、WebSocket接続を許可する
-c.ServerApp.allow_websocket_origin = ['*']
+# Jupyter Server 2.x では、allow_origin で WebSocket も制御される
+# 上記で allow_origin = '*' を設定しているので、WebSocket も許可される
 
 # ipyflow 拡張機能の有効化（既に ipyflow.json で設定されているが、念のため）
 c.ServerApp.jpserver_extensions = {
@@ -47,9 +49,6 @@ c.ServerApp.log_level = log_level
 
 # IPythonカーネルの環境変数を設定
 # IPythonカーネルがstartupスクリプトを実行するために必要
-import os
-import sys
-from pathlib import Path
 
 # デバッグモードの判定（環境変数で制御可能）
 DEBUG = os.environ.get('ENV') == 'development' or os.environ.get('DEBUG_STARTUP', '').lower() == 'true'
@@ -60,12 +59,11 @@ ipython_dir = os.environ.get('IPYTHONDIR', None)
 # カスタムカーネル設定のパスを設定
 # backend/.ipython/kernels/python3/kernel.json を使用
 if ipython_dir:
-    kernel_spec_manager_class = 'jupyter_client.kernelspec.KernelSpecManager'
     kernel_spec_dir = str(Path(ipython_dir) / 'kernels')
     
     # KernelSpecManagerの設定
-    c.KernelSpecManager.kernel_spec_manager_class = kernel_spec_manager_class
-    c.KernelSpecManager.whitelist = {'python3'}  # カスタムカーネルのみを許可
+    # jupyter_client 7.0+ では allowed_kernelspecs を使用
+    c.KernelSpecManager.allowed_kernelspecs = {'python3'}  # カスタムカーネルのみを許可
     
     if DEBUG:
         print(f'[Jupyter Server] カスタムカーネル設定ディレクトリ: {kernel_spec_dir}')
@@ -75,10 +73,12 @@ if ipython_dir:
     c.MappingKernelManager.default_kernel_name = 'python3'
     
     # カーネルマネージャーのルートディレクトリを設定
-    # これにより、カーネルがIPYTHONDIRを正しく認識する
-    c.MappingKernelManager.root_dir = '/backend'
+    # 現在の作業ディレクトリ（backend/）を使用
+    backend_dir = os.path.dirname(os.path.abspath(__file__))
+    c.MappingKernelManager.root_dir = backend_dir
     
     if DEBUG:
+        print(f'[Jupyter Server] MappingKernelManager root_dir: {backend_dir}')
         print(f'[Jupyter Server] MappingKernelManagerの設定が完了しました')
 else:
     print(f'[Jupyter Server] 警告: IPYTHONDIRが設定されていません', file=sys.stderr)

@@ -1,7 +1,8 @@
 {
   "argv": [
-    "bash",
-    "/backend/.ipython/kernels/python3/start_kernel.sh",
+    "python",
+    "-m",
+    "ipykernel_launcher",
     "-f",
     "{connection_file}"
   ],
@@ -9,9 +10,6 @@
   "language": "python",
   "metadata": {
     "debugger": true
-  },
-  "env": {
-    "IPYTHONDIR": "/backend/.ipython"
   }
 }
 
