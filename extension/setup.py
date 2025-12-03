@@ -80,15 +80,21 @@ try:
         ))
     
     # Install all static files from lab_path
+    # Include all files and directories recursively, preserving directory structure (e.g., browser/)
     if lab_path.exists():
-        static_files = []
-        for pattern in ["**/*.js", "**/*.js.map", "**/*.css", "**/*.html", "**/*.svg", "**/*.png"]:
-            static_files.extend(glob(str(lab_path / pattern), recursive=True))
-        if static_files:
-            data_files.append((
-                "share/jupyter/labextensions/jupyter-desktop/static",
-                static_files
-            ))
+        # Group files by their relative directory path to preserve structure
+        for root, dirs, files in os.walk(lab_path):
+            if files:
+                # Calculate relative path from lab_path
+                rel_root = Path(root).relative_to(lab_path)
+                # Build destination path preserving directory structure
+                if str(rel_root) == '.':
+                    dest_dir = "share/jupyter/labextensions/jupyter-desktop/static"
+                else:
+                    dest_dir = f"share/jupyter/labextensions/jupyter-desktop/static/{rel_root}"
+                # Collect files in this directory
+                dir_files = [str(Path(root) / f) for f in files]
+                data_files.append((dest_dir, dir_files))
     
     # Install style files
     style_dir = HERE / "style"
