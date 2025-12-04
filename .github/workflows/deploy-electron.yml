@@ -49,15 +49,20 @@ jobs:
       - name: Build Electron app
         run: npm run build
 
-      - name: List files in dist-electron
+      - name: List files in dist-electron (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          echo === Files in dist-electron ===
+          dir /b dist-electron || exit /b 0
+      
+      - name: List files in dist-electron (Linux)
+        if: runner.os != 'Windows'
+        shell: bash
         run: |
           echo "=== Files in dist-electron ==="
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            dir dist-electron /b || true
-          else
-            ls -lah dist-electron/ || true
-            find dist-electron -type f -name "*.AppImage" -o -name "*.deb" -o -name "*.exe" -o -name "*.blockmap" || true
-          fi
+          ls -lah dist-electron/ || true
+          find dist-electron -type f -name "*.AppImage" -o -name "*.deb" -o -name "*.exe" -o -name "*.blockmap" || true
 
       - name: Upload Electron artifacts
         uses: actions/upload-artifact@v4
