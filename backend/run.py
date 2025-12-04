@@ -19,6 +19,12 @@ import sys
 import argparse
 from pathlib import Path
 
+# backendディレクトリをPythonパスに追加（拡張機能モジュールを読み込むため）
+# ServerAppをインポートする前に追加する必要がある
+backend_dir = Path(__file__).parent.absolute()
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
+
 from jupyter_server.serverapp import ServerApp
 
 
@@ -53,11 +59,13 @@ def main():
     # 設定ファイルのパスを設定
     # Jupyter Server は現在の作業ディレクトリから jupyter_server_config.py を自動的に読み込む
     # backend/ ディレクトリから実行されることを前提とする
-    backend_dir = Path(__file__).parent.absolute()
     config_file = backend_dir / 'jupyter_server_config.py'
     
     # デバッグモードの判定（環境変数で制御可能）
     DEBUG = os.environ.get('ENV') == 'development' or os.environ.get('DEBUG_STARTUP', '').lower() == 'true'
+    
+    if DEBUG:
+        print(f'[Jupyter Server] Pythonパスに追加済み: {backend_dir}')
     
     # IPythonプロファイルのパスを設定
     # IPythonカーネルがプロジェクトローカルのプロファイルを使用するように設定
@@ -108,6 +116,29 @@ def main():
         print(f'[Jupyter Server] ホスト: {args.host}, ポート: {args.port}')
         print(f'[Jupyter Server] 引数: {" ".join(server_args)}')
     
+    # カスタム拡張機能を読み込むためのフックを設定
+    # ServerApp の initialize メソッドをフックして拡張機能を読み込む
+    original_initialize = ServerApp.initialize
+    
+    def custom_initialize(self, *args, **kwargs):
+        """ServerApp の初期化後に拡張機能を読み込む"""
+        result = original_initialize(self, *args, **kwargs)
+        # ServerApp の初期化後に拡張機能を読み込む
+        try:
+            import jupyter_server_extensions
+            if hasattr(jupyter_server_extensions, 'load_jupyter_server_extension'):
+                jupyter_server_extensions.load_jupyter_server_extension(self)
+                if DEBUG:
+                    print(f'[Jupyter Server] カスタム拡張機能を読み込みました', file=sys.stderr)
+        except Exception as e:
+            print(f'[Jupyter Server] カスタム拡張機能の読み込みに失敗: {e}', file=sys.stderr)
+            import traceback
+            traceback.print_exc()
+        return result
+    
+    # ServerApp の initialize を一時的に置き換え
+    ServerApp.initialize = custom_initialize
+    
     # sys.argv を一時的に置き換えて ServerApp を起動
     original_argv = sys.argv
     try:
@@ -120,6 +151,8 @@ def main():
         sys.exit(1)
     finally:
         sys.argv = original_argv
+        # ServerApp の initialize を元に戻す
+        ServerApp.initialize = original_initialize
 
 
 if __name__ == '__main__':

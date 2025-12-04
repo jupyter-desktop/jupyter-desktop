@@ -20,6 +20,7 @@ import { NotebookService } from '../services/notebook/notebook.service';
 import { ExecutionService } from '../services/python-runtime/execution.service';
 import { PythonRuntimeService } from '../services/python-runtime/python-runtime.service';
 import { IpyflowCommService } from '../services/python-runtime/ipyflow-comm.service';
+import { UrlParamProcessingService } from '../services/url-param.service';
 import { Subscription } from 'rxjs';
 
 interface RestoreWindowsOptions {
@@ -235,6 +236,7 @@ export class FloatingWindowManagerComponent implements OnInit, AfterViewInit, On
   private executionService = inject(ExecutionService);
   private pythonRuntime = inject(PythonRuntimeService);
   private ipyflowComm = inject(IpyflowCommService);
+  private urlParamProcessingService = inject(UrlParamProcessingService);
   
   windows: FloatingWindow[] = [];
   minimizedWindows: FloatingWindow[] = [];
@@ -289,7 +291,27 @@ export class FloatingWindowManagerComponent implements OnInit, AfterViewInit, On
       });
     }
 
-    void this.initializeWindows();
+    // 非同期処理の順序制御
+    void this.initializeApp();
+  }
+
+  /**
+   * アプリケーションの初期化処理（非同期処理の順序制御）
+   * URLパラメータ処理 → localStorage読み込み → IPyflow Comm初期化
+   */
+  private async initializeApp(): Promise<void> {
+    // 1. URLパラメータ処理を先に実行（完了を待つ）
+    try {
+      await this.urlParamProcessingService.processUrlParams();
+    } catch (error) {
+      console.error('URLパラメータ処理中にエラーが発生しました:', error);
+      // エラーが発生してもlocalStorage読み込みは実行（フォールバック）
+    }
+    
+    // 2. URLパラメータ処理が完了してからlocalStorage読み込み
+    await this.initializeWindows();
+    
+    // 3. その他の初期化処理（既存のまま、完了を待たない）
     void this.initializeIpyflowComm();
   }
 
