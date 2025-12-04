@@ -45,6 +45,7 @@ import { Subscription, combineLatest } from 'rxjs';
       [attr.data-window-id]="windowId"
       [class.minimized]="window.isMinimized"
       [class.running]="isRunning"
+      [class.error-state]="hasError && !isRunning"
       [style.left.px]="window.x"
       [style.top.px]="window.y"
       [style.width.px]="window.width"
@@ -152,25 +153,47 @@ import { Subscription, combineLatest } from 'rxjs';
       height: 100%;
     }
 
-    /* 実行中のグロー効果 */
+    /* 実行中のグロー効果（青） */
     .floating-window.running {
-      animation: glow-pulse 2s ease-in-out infinite;
+      animation: glow-pulse-blue 2s ease-in-out infinite;
     }
 
-    @keyframes glow-pulse {
+    @keyframes glow-pulse-blue {
       0%, 100% {
         box-shadow: 
-          0 0 20px rgba(76, 175, 80, 0.5),
-          0 0 40px rgba(76, 175, 80, 0.4),
-          0 0 60px rgba(76, 175, 80, 0.3),
-          0 0 80px rgba(76, 175, 80, 0.2);
+          0 0 20px rgba(33, 150, 243, 0.5),
+          0 0 40px rgba(33, 150, 243, 0.4),
+          0 0 60px rgba(33, 150, 243, 0.3),
+          0 0 80px rgba(33, 150, 243, 0.2);
       }
       50% {
         box-shadow: 
-          0 0 30px rgba(76, 175, 80, 0.8),
-          0 0 60px rgba(76, 175, 80, 0.6),
-          0 0 90px rgba(76, 175, 80, 0.4),
-          0 0 120px rgba(76, 175, 80, 0.3);
+          0 0 30px rgba(33, 150, 243, 0.8),
+          0 0 60px rgba(33, 150, 243, 0.6),
+          0 0 90px rgba(33, 150, 243, 0.4),
+          0 0 120px rgba(33, 150, 243, 0.3);
+      }
+    }
+
+    /* エラー時のグロー効果（赤） */
+    .floating-window.error-state {
+      animation: glow-pulse-red 2s ease-in-out infinite;
+    }
+
+    @keyframes glow-pulse-red {
+      0%, 100% {
+        box-shadow: 
+          0 0 20px rgba(244, 67, 54, 0.5),
+          0 0 40px rgba(244, 67, 54, 0.4),
+          0 0 60px rgba(244, 67, 54, 0.3),
+          0 0 80px rgba(244, 67, 54, 0.2);
+      }
+      50% {
+        box-shadow: 
+          0 0 30px rgba(244, 67, 54, 0.8),
+          0 0 60px rgba(244, 67, 54, 0.6),
+          0 0 90px rgba(244, 67, 54, 0.4),
+          0 0 120px rgba(244, 67, 54, 0.3);
       }
     }
   `]
