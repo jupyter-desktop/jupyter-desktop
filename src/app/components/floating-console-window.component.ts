@@ -83,7 +83,154 @@ import { Subscription, combineLatest, pairwise, startWith } from 'rxjs';
     <div class="resize-handle gradient-style" (mousedown)="onResizeMouseDown($event)"></div>
   </div>
   `,
-  styleUrls: ['../styles/floating-window-base.styles.scss']
+  styleUrls: ['../styles/floating-window-base.styles.scss'],
+  styles: [`
+    /* コンソールウィンドウ固有のスタイル */
+    .floating-window.console-window {
+      border: 2px solid var(--bg-window);
+      box-shadow: none;
+      backdrop-filter: blur(18px) saturate(140%);
+      -webkit-backdrop-filter: blur(18px) saturate(140%);
+      transition: transform 0.2s ease, box-shadow 0.3s ease, border 0.3s ease;
+    }
+
+    .floating-window.console-window:hover,
+    .floating-window.console-window.is-active {
+      border: 2px solid var(--accent-primary);
+    }
+
+    .floating-window.console-window .window-titlebar {
+      background: var(--bg-window);
+      border-bottom: none;
+      backdrop-filter: blur(12px);
+    }
+
+    .floating-window.console-window .window-title {
+      color: var(--text-primary);
+      letter-spacing: 0.02em;
+    }
+
+    .floating-window.console-window .window-status {
+      color: var(--accent-cyan-light);
+      text-shadow: 0 0 6px var(--accent-primary);
+    }
+
+    .floating-window.console-window .resize-handle {
+      background: linear-gradient(
+        135deg,
+        transparent 0%,
+        transparent 40%,
+        var(--accent-cyan) 40%,
+        var(--accent-cyan) 60%,
+        transparent 60%
+      );
+    }
+
+    .console-output {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 8px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      position: relative;
+      z-index: 1;
+    }
+
+    .window-content.console-panel {
+      flex-direction: column;
+      color: var(--text-secondary);
+    }
+
+    .console-line {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 4px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .console-time {
+      color: var(--text-muted);
+      flex-shrink: 0;
+      font-size: 10px;
+    }
+
+    .console-content {
+      flex: 1;
+    }
+
+    .console-stdout {
+      color: var(--text-window-title);
+    }
+
+    .console-stderr {
+      color: var(--status-error);
+    }
+
+    .console-result {
+      color: var(--accent-cyan);
+    }
+
+    .console-error {
+      color: var(--status-error);
+      font-weight: 600;
+    }
+
+    .console-output::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .console-output::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .console-output::-webkit-scrollbar-thumb {
+      background: var(--bg-scrollbar-thumb);
+      border-radius: 3px;
+    }
+
+    .console-empty {
+      color: var(--text-muted);
+      font-style: italic;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .rich-output {
+      // リッチ出力のスタイル
+      img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 4px;
+        margin: 4px 0;
+      }
+
+      pre.json-output {
+        background: var(--bg-tertiary);
+        padding: 8px;
+        border-radius: 4px;
+        overflow-x: auto;
+        code {
+          font-family: 'Consolas', 'Courier New', monospace;
+          font-size: 12px;
+          color: var(--accent-cyan);
+        }
+      }
+
+      pre.latex-output {
+        background: var(--bg-tertiary);
+        padding: 8px;
+        border-radius: 4px;
+        code {
+          font-family: 'Consolas', 'Courier New', monospace;
+          font-size: 12px;
+          color: var(--text-window-title);
+        }
+      }
+    }
+  `]
 })
 export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy {
   @Input() windowId!: string;
