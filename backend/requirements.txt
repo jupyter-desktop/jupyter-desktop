@@ -18,6 +18,9 @@ ipyflow>=0.0.217
 # 環境変数管理
 python-dotenv>=1.0.1
 
+# Google Driveダウンロード用
+requests>=2.31.0
+
 # 開発・デバッグ用（本番環境では不要な場合があります）
 debugpy>=1.8.0
 

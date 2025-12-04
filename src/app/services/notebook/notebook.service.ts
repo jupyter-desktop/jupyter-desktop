@@ -4,6 +4,7 @@ import { FloatingWindow } from '../floating-window-manager.service';
 import { windowsToNotebook, notebookToWindows } from '../../utils/notebook-converter';
 import { NotebookFile } from '../../models/notebook';
 import { OutputService, RuntimeOutput } from '../python-runtime/output.service';
+import { GoogleDriveService } from '../url-param.service';
 
 const LOCAL_STORAGE_KEY = 'jupyter:lastDesktop';
 
@@ -28,6 +29,7 @@ const LOCAL_STORAGE_KEY = 'jupyter:lastDesktop';
 })
 export class NotebookService {
   private outputService = inject(OutputService);
+  private googleDriveService = inject(GoogleDriveService);
   
   constructor(private electronService: ElectronService) {}
 
@@ -215,6 +217,80 @@ export class NotebookService {
       const errorMessage = error.message || error.toString() || '不明なエラー';
       return { success: false, error: errorMessage };
     }
+  }
+
+  /**
+   * Notebook形式のJSON文字列を検証してlocalStorageに保存します
+   * 
+   * 【役割】
+   * - Notebook形式のJSON文字列を検証
+   * - 検証成功後、localStorageに保存
+   * 
+   * 【責務の境界】
+   * - Notebook形式の検証とlocalStorageへの保存のみを担当
+   * - どこからJSONが来たかは問わない（Google Drive、ファイル、その他）
+   * 
+   * @param notebookJson Notebook形式のJSON文字列
+   * @throws Notebook形式が無効な場合、またはlocalStorageへの保存に失敗した場合
+   */
+  async saveNotebookToLocalStorage(notebookJson: string): Promise<void> {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      throw new Error('ローカルストレージが利用できません。');
+    }
+
+    try {
+      // JSONとしてパース
+      const notebook: NotebookFile = JSON.parse(notebookJson);
+      
+      // Notebook形式を検証
+      if (!this.isValidNotebookFile(notebook)) {
+        throw new Error('Notebook形式が正しくありません。');
+      }
+
+      // localStorageに保存
+      window.localStorage.setItem(LOCAL_STORAGE_KEY, notebookJson);
+    } catch (error: any) {
+      if (error instanceof SyntaxError) {
+        throw new Error('JSON形式が正しくありません。');
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Google DriveからNotebookファイルをダウンロードしてlocalStorageに保存します
+   * 
+   * 【役割】
+   * - Google Drive URLからファイルIDを抽出
+   * - バックエンド経由でファイルをダウンロード
+   * - Notebook形式を検証してlocalStorageに保存
+   * 
+   * 【責務の境界】
+   * - Google DriveからのダウンロードはGoogleDriveServiceに委譲
+   * - Notebook形式の検証とlocalStorageへの保存を担当
+   * - URLパラメータの読み取りは行わない（UrlParamServiceが担当）
+   * 
+   * 【処理フロー】
+   * 1. GoogleDriveServiceを使ってファイルIDを抽出
+   * 2. GoogleDriveServiceでバックエンド経由でファイルをダウンロード（JSON文字列として取得）
+   * 3. saveNotebookToLocalStorage()でJSONを検証してlocalStorageに保存
+   * 4. FloatingWindow[]への変換は既存のloadFromLocalStorage()が行う
+   * 
+   * @param gdriveUrl Google DriveのURL
+   * @throws ファイルIDの抽出に失敗した場合、ダウンロードに失敗した場合、またはNotebook形式が無効な場合
+   */
+  async loadFromGoogleDrive(gdriveUrl: string): Promise<void> {
+    // ファイルIDを抽出
+    const fileId = this.googleDriveService.extractFileId(gdriveUrl);
+    if (!fileId) {
+      throw new Error('Google Drive URLからファイルIDを抽出できませんでした。');
+    }
+
+    // バックエンド経由でファイルをダウンロード
+    const notebookJson = await this.googleDriveService.downloadFile(fileId);
+
+    // Notebook形式を検証してlocalStorageに保存
+    await this.saveNotebookToLocalStorage(notebookJson);
   }
 
   /**

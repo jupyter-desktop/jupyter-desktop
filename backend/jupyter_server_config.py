@@ -35,11 +35,28 @@ c.ServerApp.disable_check_xsrf = True
 # Jupyter Server 2.x では、allow_origin で WebSocket も制御される
 # 上記で allow_origin = '*' を設定しているので、WebSocket も許可される
 
+# backendディレクトリをPythonパスに追加（拡張機能を見つけるため）
+backend_dir = Path(__file__).parent.absolute()
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
+
 # ipyflow 拡張機能の有効化（既に ipyflow.json で設定されているが、念のため）
+# カスタム拡張機能も有効化
 c.ServerApp.jpserver_extensions = {
     'ipyflow': True,
-    'jupyter_server_extensions': True  # カスタム拡張機能を有効化
+    'jupyter_server_extensions': True,  # カスタム拡張機能を有効化（Google Drive拡張機能も含む）
 }
+
+# デバッグ: 拡張機能の設定を確認
+DEBUG = os.environ.get('ENV') == 'development' or os.environ.get('DEBUG_STARTUP', '').lower() == 'true'
+if DEBUG:
+    print(f'[Jupyter Server Config] jpserver_extensions設定: {c.ServerApp.jpserver_extensions}', file=sys.stderr)
+    # モジュールがインポート可能か確認
+    try:
+        import jupyter_server_extensions
+        print(f'[Jupyter Server Config] jupyter_server_extensionsモジュールのインポートに成功', file=sys.stderr)
+    except ImportError as e:
+        print(f'[Jupyter Server Config] jupyter_server_extensionsモジュールのインポートに失敗: {e}', file=sys.stderr)
 
 # ログレベルの設定（環境変数で制御可能）
 # デフォルトはINFO、ENV=developmentの場合はDEBUG
@@ -51,7 +68,9 @@ c.ServerApp.log_level = log_level
 # IPythonカーネルがstartupスクリプトを実行するために必要
 
 # デバッグモードの判定（環境変数で制御可能）
-DEBUG = os.environ.get('ENV') == 'development' or os.environ.get('DEBUG_STARTUP', '').lower() == 'true'
+# 上で既に定義されている場合は再定義しない
+if 'DEBUG' not in locals():
+    DEBUG = os.environ.get('ENV') == 'development' or os.environ.get('DEBUG_STARTUP', '').lower() == 'true'
 
 # IPYTHONDIR環境変数を取得（run.pyで設定される）
 ipython_dir = os.environ.get('IPYTHONDIR', None)

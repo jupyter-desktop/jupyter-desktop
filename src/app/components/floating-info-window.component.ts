@@ -119,12 +119,7 @@ import { ThemeService } from '../services/theme.service';
     }
 
     .window-title {
-      color: var(--text-window-title);
-      font-size: 13px;
       flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
     }
 
     .info-panel {

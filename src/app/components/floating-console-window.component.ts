@@ -14,6 +14,7 @@ import { FloatingWindow, FloatingWindowManagerService } from '../services/floati
 import { ExecutionState, ExecutionService } from '../services/python-runtime/execution.service';
 import { OutputService, RuntimeOutput } from '../services/python-runtime/output.service';
 import { RichOutputRendererService } from '../services/python-runtime/rich-output-renderer.service';
+import { ConsoleResizeStrategyFactory } from '../services/console-resize/console-resize-strategy-factory.service';
 import { SafeHtml } from '@angular/platform-browser';
 import { Subscription, combineLatest, pairwise, startWith } from 'rxjs';
 
@@ -84,27 +85,22 @@ import { Subscription, combineLatest, pairwise, startWith } from 'rxjs';
   `,
   styleUrls: ['../styles/floating-window-base.styles.scss'],
   styles: [`
+    /* コンソールウィンドウ固有のスタイル */
     .floating-window.console-window {
-      border: none;
+      border: 2px solid var(--bg-window);
       box-shadow: none;
       backdrop-filter: blur(18px) saturate(140%);
       -webkit-backdrop-filter: blur(18px) saturate(140%);
-      transition: transform 0.2s ease, box-shadow 0.3s ease;
+      transition: transform 0.2s ease, box-shadow 0.3s ease, border 0.3s ease;
     }
 
     .floating-window.console-window:hover,
     .floating-window.console-window.is-active {
-      box-shadow:
-        0 0 30px rgba(0, 172, 193, 0.35),
-        0 40px 130px rgba(0, 172, 193, 0.4);
+      border: 2px solid var(--accent-primary);
     }
 
     .floating-window.console-window .window-titlebar {
-      background: linear-gradient(
-        180deg,
-        var(--bg-window-titlebar-gradient-start) 0%,
-        var(--bg-window-titlebar-gradient-end) 100%
-      );
+      background: var(--bg-window);
       border-bottom: none;
       backdrop-filter: blur(12px);
     }
@@ -116,7 +112,7 @@ import { Subscription, combineLatest, pairwise, startWith } from 'rxjs';
 
     .floating-window.console-window .window-status {
       color: var(--accent-cyan-light);
-      text-shadow: 0 0 6px rgba(0, 172, 193, 0.45);
+      text-shadow: 0 0 6px var(--accent-primary);
     }
 
     .floating-window.console-window .resize-handle {
@@ -245,6 +241,7 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
   private executionService = inject(ExecutionService);
   private outputService = inject(OutputService);
   private richOutputRenderer = inject(RichOutputRendererService);
+  private resizeStrategyFactory = inject(ConsoleResizeStrategyFactory);
   private cdr = inject(ChangeDetectorRef);
   
   isRunning = false;
@@ -258,10 +255,9 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
   private editorId: string | null = null;
   private contentResizeObserver: ResizeObserver | null = null;
   private mutationObserver: MutationObserver | null = null;
-  private imageLoadListeners = new Map<HTMLImageElement, () => void>();
   private executedScripts = new Set<string>(); // 実行済みスクリプトのIDを追跡
   private autoResizeEnabled = true;
-  private autoResizeState: 'idle' | 'pending' | 'running' | 'done' = 'idle';
+  private autoResizeScheduled = false; // リサイズがスケジュール済みかを追跡
   private hasUserManuallyResized = false; // ユーザーが手動でリサイズしたかを追跡
   
   // 自動リサイズの制約値
@@ -270,11 +266,7 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
   private readonly MIN_WINDOW_WIDTH = 300;
   private readonly MAX_WINDOW_WIDTH = 1200;
   private readonly TITLEBAR_HEIGHT = 40; // タイトルバーの高さ
-  private readonly CONTENT_PADDING = 16; // コンテンツのパディング（上下8px × 2）
-  private readonly DEFAULT_IMAGE_WIDTH = 650; // 画像表示時のデフォルト幅
-  private readonly DEFAULT_IMAGE_HEIGHT = 500; // 画像表示時のデフォルト高さ
-  private readonly IMAGE_LOAD_TIMEOUT_MS = 1500; // 画像読み込み待機の上限
-  private readonly INITIAL_LAYOUT_DELAY_MS = 120; // レイアウト安定化のための追加待機
+  private readonly WINDOW_PADDING = 20; // ウィンドウのパディング（スクロールバー等）
 
   get window() {
     return this.windowManager.getWindow(this.windowId) || {
@@ -336,15 +328,10 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
         // 実行状態の遷移を検出
         const isExecutionCompleted = previousState === 'running' && currentState === 'idle';
         
-        // 実行完了時、または出力が追加された時に自動リサイズをスケジュール
+        // 実行完了時に自動リサイズをスケジュール
         // ただし、ユーザーが手動でリサイズしていない場合のみ
         if (isExecutionCompleted && outputs.length > 0 && !this.hasUserManuallyResized) {
-          // 画像出力がある場合は、MutationObserverとobserveImageLoadで画像が追加・読み込み完了した時にリサイズが実行される
-          // テキスト出力のみの場合は即座にリサイズを実行
-          const hasImageOutput = outputs.some(o => o.mimeType && o.mimeType.startsWith('image/'));
-          if (!hasImageOutput) {
-            this.scheduleAutoResize();
-          }
+          this.scheduleAutoResize();
         }
         
         this.latestExecutionState = currentState;
@@ -460,11 +447,6 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
       this.mutationObserver.disconnect();
       this.mutationObserver = null;
     }
-    // 画像のロードリスナーをクリーンアップ
-    this.imageLoadListeners.forEach((cleanup, img) => {
-      cleanup();
-    });
-    this.imageLoadListeners.clear();
   }
 
   /**
@@ -521,12 +503,12 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
   }
 
   /**
-   * コンテンツサイズに応じてウィンドウサイズを調整
+   * コンテンツサイズに応じてウィンドウサイズを調整（制約値の適用）
+   * @param contentWidth - コンテンツの幅
    * @param contentHeight - コンテンツの高さ
-   * @param contentWidth - コンテンツの幅（オプション）
    */
-  private adjustWindowSizeToContent(contentHeight: number, contentWidth?: number): void {
-    if (!this.autoResizeEnabled) {
+  private adjustWindowSizeToContent(contentWidth: number, contentHeight: number): void {
+    if (!this.autoResizeEnabled || this.hasUserManuallyResized) {
       return;
     }
 
@@ -535,72 +517,19 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
       return;
     }
 
-    // コンテンツサイズに基づいてウィンドウサイズを計算
-    let requiredHeight = contentHeight + this.TITLEBAR_HEIGHT + this.CONTENT_PADDING;
-    let requiredWidth: number;
-    
-    // 小さいコンテンツかどうかを判定するためのしきい値
-    const SMALL_CONTENT_HEIGHT_THRESHOLD = 200; // 高さが200px以下は小さいコンテンツとみなす
-    const SMALL_WIDTH_THRESHOLD = 500; // 幅が500px以下は小さいコンテンツとみなす
-    const OPTIMAL_TEXT_WIDTH = 400; // テキストコンテンツの推奨幅
-    
-    // 小さいコンテンツの判定：
-    // 1. 幅が指定されていない場合（テキストのみ）→ 常に小さいコンテンツとして扱う
-    // 2. 幅が指定されているが、高さが小さく幅も小さい場合
-    const isSmallContent = contentWidth === undefined || 
-                           (contentHeight <= SMALL_CONTENT_HEIGHT_THRESHOLD && 
-                            contentWidth <= SMALL_WIDTH_THRESHOLD);
-    
-    if (isSmallContent) {
-      // 小さいコンテンツ（テキストのみなど）の場合は、適切な最小サイズを使用
-      requiredWidth = OPTIMAL_TEXT_WIDTH;
-      // 高さもコンテンツに合わせて調整（ただし最小高さは維持）
-      requiredHeight = Math.max(
-        this.MIN_WINDOW_HEIGHT,
-        contentHeight + this.TITLEBAR_HEIGHT + this.CONTENT_PADDING
-      );
-    } else if (contentWidth && contentWidth > 0) {
-      // 大きいコンテンツ（画像など）の場合
-      // コンテンツの幅が指定されている場合、それに基づいて幅を計算
-      // ウィンドウサイズ = コンテンツサイズ + パディング + スクロールバー + マージン
-      requiredWidth = contentWidth + this.CONTENT_PADDING + 20 + 40;
-      
-      // コンテンツが大きい場合は、デフォルトサイズを上限として調整
-      if (contentWidth > this.DEFAULT_IMAGE_WIDTH || contentHeight > this.DEFAULT_IMAGE_HEIGHT) {
-        const aspectRatio = contentHeight / contentWidth;
-        const defaultAspectRatio = this.DEFAULT_IMAGE_HEIGHT / this.DEFAULT_IMAGE_WIDTH;
-        
-        let targetContentWidth: number;
-        let targetContentHeight: number;
-        
-        if (aspectRatio > defaultAspectRatio) {
-          // 縦長の場合、高さを基準にする
-          targetContentHeight = Math.min(contentHeight, this.DEFAULT_IMAGE_HEIGHT);
-          targetContentWidth = targetContentHeight / aspectRatio;
-        } else {
-          // 横長の場合、幅を基準にする
-          targetContentWidth = Math.min(contentWidth, this.DEFAULT_IMAGE_WIDTH);
-          targetContentHeight = targetContentWidth * aspectRatio;
-        }
-        
-        requiredWidth = targetContentWidth + this.CONTENT_PADDING + 20 + 40;
-        requiredHeight = targetContentHeight + this.TITLEBAR_HEIGHT + this.CONTENT_PADDING;
-      }
-    } else {
-      // コンテンツの幅が指定されていないが、大きいコンテンツの場合
-      // 現在の幅を維持
-      requiredWidth = currentWindow.width;
-    }
+    // ウィンドウサイズ = コンテンツサイズ + タイトルバー + パディング
+    const requiredWidth = contentWidth + this.WINDOW_PADDING;
+    const requiredHeight = contentHeight + this.TITLEBAR_HEIGHT + this.WINDOW_PADDING;
     
     // 最小/最大サイズの制約を適用
-    const newHeight = Math.max(
-      this.MIN_WINDOW_HEIGHT,
-      Math.min(this.MAX_WINDOW_HEIGHT, requiredHeight)
-    );
-    
     const newWidth = Math.max(
       this.MIN_WINDOW_WIDTH,
       Math.min(this.MAX_WINDOW_WIDTH, requiredWidth)
+    );
+    
+    const newHeight = Math.max(
+      this.MIN_WINDOW_HEIGHT,
+      Math.min(this.MAX_WINDOW_HEIGHT, requiredHeight)
     );
 
     // サイズが現在と異なる場合のみ更新（5px以上の差）
@@ -654,158 +583,34 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
    * 自動リサイズをスケジュール（出力変更後に実行）
    */
   private scheduleAutoResize(): void {
-    if (!this.autoResizeEnabled || this.autoResizeState !== 'idle' || this.hasUserManuallyResized) {
+    if (!this.autoResizeEnabled || this.hasUserManuallyResized || this.autoResizeScheduled) {
       return;
     }
 
-    this.autoResizeState = 'pending';
-    void this.runInitialAutoResize();
-  }
+    this.autoResizeScheduled = true;
 
-  private async runInitialAutoResize(): Promise<void> {
-    if (this.autoResizeState !== 'pending') {
-      return;
-    }
-
-    this.autoResizeState = 'running';
-    await this.waitForAnimationFrames(2);
-
-    const outputElement = this.consoleOutputRef?.nativeElement;
-    if (!outputElement) {
-      this.finishAutoResize();
-      return;
-    }
-
-    await this.waitForImagesToLoad(outputElement);
-    await this.waitForAnimationFrames(1);
-    await this.delay(this.INITIAL_LAYOUT_DELAY_MS);
-
-    if (this.autoResizeState !== 'running') {
-      return;
-    }
-
-    try {
-      this.performAutoResize();
-    } finally {
-      this.finishAutoResize();
-    }
-  }
-
-  private finishAutoResize(): void {
-    this.autoResizeState = 'idle'; // 次のリサイズが可能な状態に戻す
-    // ユーザーが手動でリサイズしていない場合は、自動リサイズを継続
-    if (this.hasUserManuallyResized) {
-      this.autoResizeEnabled = false;
-    } else {
-      // ユーザーが手動でリサイズしていない場合は、自動リサイズを有効のままにする
-      this.autoResizeEnabled = true;
-    }
-  }
-
-  private waitForAnimationFrames(frames: number): Promise<void> {
-    if (frames <= 0) {
-      return Promise.resolve();
-    }
-
-    if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
-      return new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
-    }
-
-    return new Promise((resolve) => {
-      let remaining = frames;
-      const step = () => {
-        remaining -= 1;
-        if (remaining <= 0) {
-          resolve();
-        } else {
-          window.requestAnimationFrame(step);
-        }
-      };
-      window.requestAnimationFrame(step);
-    });
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => {
-      if (typeof window !== 'undefined') {
-        window.setTimeout(resolve, ms);
-      } else {
-        setTimeout(resolve, ms);
-      }
-    });
-  }
-
-  private waitForImagesToLoad(container: HTMLElement): Promise<void> {
-    if (typeof window === 'undefined') {
-      return Promise.resolve();
-    }
-
-    const images = Array.from(container.querySelectorAll('img'));
-    const pendingImages = images.filter(img => !img.complete);
-
-    if (pendingImages.length === 0) {
-      return Promise.resolve();
-    }
-
-    return new Promise((resolve) => {
-      let remaining = pendingImages.length;
-      let timeoutId: number | null = null;
-      const cleanupHandlers: Array<() => void> = [];
-
-      const cleanup = () => {
-        cleanupHandlers.forEach(fn => fn());
-        cleanupHandlers.length = 0;
-        if (timeoutId !== null) {
-          window.clearTimeout(timeoutId);
-          timeoutId = null;
-        }
-      };
-
-      const maybeFinish = () => {
-        remaining -= 1;
-        if (remaining <= 0) {
-          cleanup();
-          resolve();
-        }
-      };
-
-      pendingImages.forEach((img) => {
-        if (img.complete) {
-          remaining -= 1;
-          return;
-        }
-
-        const handler = () => {
-          maybeFinish();
-        };
-
-        img.addEventListener('load', handler, { once: true });
-        img.addEventListener('error', handler, { once: true });
-        cleanupHandlers.push(() => {
-          img.removeEventListener('load', handler);
-          img.removeEventListener('error', handler);
+    // DOM更新後にリサイズを実行
+    Promise.resolve().then(() => {
+      if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            this.performAutoResize();
+          });
         });
-      });
-
-      if (remaining <= 0) {
-        cleanup();
-        resolve();
-        return;
+      } else {
+        setTimeout(() => {
+          this.performAutoResize();
+        }, 100);
       }
-
-      timeoutId = window.setTimeout(() => {
-        cleanup();
-        resolve();
-      }, this.IMAGE_LOAD_TIMEOUT_MS);
     });
   }
 
   /**
-   * 自動リサイズを実行
+   * 自動リサイズを実行（戦略パターンを使用）
    */
-  private performAutoResize(): void {
+  private async performAutoResize(): Promise<void> {
+    this.autoResizeScheduled = false;
+
     if (!this.autoResizeEnabled || this.hasUserManuallyResized) {
       return;
     }
@@ -815,62 +620,37 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
       return;
     }
 
+    // ResizeObserverを一時的に切断
     const observer = this.contentResizeObserver;
     if (observer) {
       observer.disconnect();
     }
-    // 画像要素の自然サイズを取得
-    const images = outputElement.querySelectorAll('img');
-    let hasImage = false;
-    let imageWidth: number | undefined = undefined;
-    let imageHeight = 0;
-    
-    images.forEach((img: HTMLImageElement) => {
-      if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
-        // 画像の自然サイズを使用
-        hasImage = true;
-        imageWidth = Math.max(imageWidth || 0, img.naturalWidth);
-        imageHeight = Math.max(imageHeight, img.naturalHeight);
-      } else if (img.offsetWidth > 0 || img.offsetHeight > 0) {
-        // 画像がまだ読み込まれていない場合、表示サイズを使用
-        hasImage = true;
-        imageWidth = Math.max(imageWidth || 0, img.offsetWidth || 0);
-        imageHeight = Math.max(imageHeight, img.offsetHeight || 0);
+
+    try {
+      // 戦略ファクトリーから適切な戦略を取得
+      const strategy = this.resizeStrategyFactory.getStrategy(outputElement);
+      if (!strategy) {
+        return;
       }
-    });
-    
-    let contentHeight: number;
-    let contentWidth: number | undefined;
-    
-    if (hasImage) {
-      // 画像がある場合、画像のサイズを使用
-      contentHeight = imageHeight;
-      contentWidth = imageWidth;
-    } else {
-      // テキストコンテンツの場合、実際のコンテンツ要素の高さを合計
-      const consoleLines = outputElement.querySelectorAll('.console-line');
-      contentHeight = 0;
-      
-      consoleLines.forEach((line: Element) => {
-        const lineElement = line as HTMLElement;
-        // 実際に表示されている高さを使用
-        const lineHeight = lineElement.offsetHeight || lineElement.scrollHeight || 0;
-        contentHeight += lineHeight;
-      });
-      
-      // パディング分を追加（上下8px × 2 = 16px）
-      contentHeight += this.CONTENT_PADDING;
-      
-      // テキストコンテンツの場合は幅を考慮しない
-      contentWidth = undefined;
+
+      // 戦略を使ってコンテンツサイズを計算
+      const contentSize = await strategy.calculateSize(outputElement);
+      if (!contentSize) {
+        return;
+      }
+
+      // 計算されたサイズでウィンドウをリサイズ
+      this.adjustWindowSizeToContent(contentSize.width, contentSize.height);
+    } finally {
+      // ResizeObserverを再接続
+      if (observer && outputElement) {
+        observer.observe(outputElement);
+      }
     }
-    
-    // コンテンツサイズに基づいてリサイズ
-    this.adjustWindowSizeToContent(contentHeight, contentWidth);
   }
 
   /**
-   * 画像などのリッチ出力の追加を監視するMutationObserverを設定
+   * リッチ出力（画像、スクリプト等）の追加を監視するMutationObserverを設定
    */
   private setupMutationObserver(): void {
     if (typeof MutationObserver === 'undefined') {
@@ -884,7 +664,7 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
       }
 
       this.mutationObserver = new MutationObserver((mutations) => {
-        let hasNewImages = false;
+        let hasNewContent = false;
         let hasNewScripts = false;
         
         mutations.forEach((mutation) => {
@@ -893,19 +673,8 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
             if (node.nodeType === Node.ELEMENT_NODE) {
               const element = node as HTMLElement;
               
-              // 画像要素を検索
-              const images = element.querySelectorAll('img');
-              if (images.length > 0 || element.tagName === 'IMG') {
-                hasNewImages = true;
-                
-                // 既存の画像も含めて監視
-                if (element.tagName === 'IMG') {
-                  this.observeImageLoad(element as HTMLImageElement);
-                }
-                images.forEach((img: HTMLImageElement) => {
-                  this.observeImageLoad(img);
-                });
-              }
+              // 何らかの要素が追加された場合、リサイズをスケジュール
+              hasNewContent = true;
               
               // scriptタグを検索
               if (element.tagName === 'SCRIPT') {
@@ -921,21 +690,14 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
         });
         
         // 新しいスクリプトが追加された場合、少し遅延させてから実行
-        // DOM要素が確実に存在することを確認するため
         if (hasNewScripts && outputElement) {
           setTimeout(() => {
             this.executeModuleScripts(outputElement);
           }, 200);
         }
         
-        // 新しい画像が追加された場合、リサイズをスケジュール
-        // ただし、ユーザーが手動でリサイズしていない場合のみ
-        if (hasNewImages && !this.hasUserManuallyResized) {
-          // autoResizeEnabledがfalseの場合は、再度有効化してリサイズを実行
-          if (!this.autoResizeEnabled) {
-            this.autoResizeEnabled = true;
-            this.autoResizeState = 'idle';
-          }
+        // 新しいコンテンツが追加された場合、リサイズをスケジュール
+        if (hasNewContent && !this.hasUserManuallyResized) {
           this.scheduleAutoResize();
         }
       });
@@ -944,12 +706,6 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
       this.mutationObserver.observe(outputElement, {
         childList: true,
         subtree: true
-      });
-      
-      // 既存の画像も監視
-      const existingImages = outputElement.querySelectorAll('img');
-      existingImages.forEach((img: HTMLImageElement) => {
-        this.observeImageLoad(img);
       });
       
       // 既存のスクリプトタグも実行
@@ -1054,54 +810,6 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
       hash = hash & hash; // Convert to 32bit integer
     }
     return hash.toString();
-  }
-
-  /**
-   * 画像の読み込み完了を監視し、読み込み後にリサイズを実行
-   */
-  private observeImageLoad(img: HTMLImageElement): void {
-    // 既に監視中の場合はスキップ
-    if (this.imageLoadListeners.has(img)) {
-      return;
-    }
-
-    const handleLoad = () => {
-      // 画像の読み込み完了後、リサイズをスケジュール
-      // ただし、ユーザーが手動でリサイズしていない場合のみ
-      if (this.hasUserManuallyResized) {
-        return;
-      }
-      // autoResizeEnabledがfalseの場合は、再度有効化してリサイズを実行
-      if (!this.autoResizeEnabled) {
-        this.autoResizeEnabled = true;
-        this.autoResizeState = 'idle';
-      }
-      setTimeout(() => {
-        this.scheduleAutoResize();
-      }, 100);
-    };
-
-    const handleError = () => {
-      // エラー時もリサイズを試みる（ただし、ユーザーが手動でリサイズしていない場合のみ）
-      if (!this.hasUserManuallyResized) {
-        this.scheduleAutoResize();
-      }
-    };
-
-    if (img.complete) {
-      // 既に読み込み済みの場合は即座にリサイズ
-      handleLoad();
-    } else {
-      // 読み込み中の場合はイベントを監視
-      img.addEventListener('load', handleLoad, { once: true });
-      img.addEventListener('error', handleError, { once: true });
-      
-      // クリーンアップ関数を保存
-      this.imageLoadListeners.set(img, () => {
-        img.removeEventListener('load', handleLoad);
-        img.removeEventListener('error', handleError);
-      });
-    }
   }
 }
 
