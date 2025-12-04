@@ -683,7 +683,7 @@ export class FloatingWindowManagerComponent implements OnInit, AfterViewInit, On
    */
   private createInitialInfoWindows(): void {
     const editorWindowId = this.windowManager.createWindow('main', '', false, undefined, 'editor');
-    const informationWindowId = this.windowManager.createWindow('', 'introduction.html', false, undefined, 'info');
+    const informationWindowId = this.windowManager.createWindow('', '', false, undefined, 'info');
   }
 
   /**
