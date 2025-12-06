@@ -136,6 +136,8 @@ import { Subscription, combineLatest, pairwise, startWith } from 'rxjs';
       line-height: 1.5;
       position: relative;
       z-index: 1;
+      user-select: text;
+      -webkit-user-select: text;
     }
 
     .window-content.console-panel {
@@ -149,6 +151,8 @@ import { Subscription, combineLatest, pairwise, startWith } from 'rxjs';
       margin-bottom: 4px;
       white-space: pre-wrap;
       word-break: break-word;
+      user-select: text;
+      -webkit-user-select: text;
     }
 
     .console-time {
@@ -159,6 +163,8 @@ import { Subscription, combineLatest, pairwise, startWith } from 'rxjs';
 
     .console-content {
       flex: 1;
+      user-select: text;
+      -webkit-user-select: text;
     }
 
     .console-stdout {
@@ -200,6 +206,8 @@ import { Subscription, combineLatest, pairwise, startWith } from 'rxjs';
 
     .rich-output {
       // リッチ出力のスタイル
+      user-select: text;
+      -webkit-user-select: text;
       img {
         max-width: 100%;
         height: auto;
