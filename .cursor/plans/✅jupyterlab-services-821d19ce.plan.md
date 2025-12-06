@@ -1,4 +1,12 @@
-<!-- 821d19ce-6b1a-467f-9ee9-42e12aa96772 08ed9cbb-f762-4b08-b551-cef22f48db96 -->
+---
+name: "@jupyterlab/services 完全置き換え計画"
+overview: ""
+todos:
+  - id: b63b0967-98b0-49b6-a28d-302772b05c28
+    content: 既存のテストと統合テストを実行して動作確認
+    status: pending
+---
+
 # @jupyterlab/services 完全置き換え計画
 
 ## 概要
@@ -80,10 +88,3 @@
 - `@jupyterlab/services` は Jupyter Server Protocol (JSP) の標準実装を使用するため、メッセージ形式が異なります
 - `IMessage` インターフェースを使用し、`header`, `parent_header`, `content`, `metadata`, `buffers` の標準形式に従います
 - カーネルメッセージの購読は `kernel.iopubMessage.connect()` や `kernel.anyMessage.connect()` を使用します
-
-### To-dos
-
-- [ ] package.json に @jupyterlab/services を追加
-- [ ] PythonRuntimeService を @jupyterlab/services を使用するようにリファクタリング（既存APIを維持）
-- [ ] 環境設定を @jupyterlab/services の ServerConnection で使用できる形式に確認・調整
-- [ ] 既存のテストと統合テストを実行して動作確認

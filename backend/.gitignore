@@ -12,3 +12,5 @@ __pycache__/
 *.duckdb
 *.duckdb.wal
 e_api_login_cache.json
+
+.ipython/.gitignore
