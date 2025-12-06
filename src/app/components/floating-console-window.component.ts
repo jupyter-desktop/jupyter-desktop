@@ -71,7 +71,7 @@ import { Subscription, combineLatest, pairwise, startWith } from 'rxjs';
             @if (isRichOutput(output)) {
               <div class="console-content rich-output" [innerHTML]="renderOutput(output)"></div>
             } @else {
-              <span class="console-content">{{ output.content }}</span>
+              <span class="console-content" [innerHTML]="renderOutput(output)"></span>
             }
           </div>
         }
@@ -405,7 +405,7 @@ export class FloatingConsoleWindowComponent implements AfterViewInit, OnDestroy 
   /**
    * リッチ出力をレンダリング
    */
-  renderOutput(output: RuntimeOutput): SafeHtml | string {
+  renderOutput(output: RuntimeOutput): SafeHtml {
     return this.richOutputRenderer.render(output);
   }
 

@@ -54,10 +54,15 @@ export class RichOutputRendererService {
    * 注意: このメソッドは信頼できるソース（Pythonカーネル）からのデータのみを処理します。
    * XSS対策のため、bypassSecurityTrustHtmlを使用しますが、信頼できるソースからのデータのみに使用してください。
    */
-  render(output: RuntimeOutput): SafeHtml | string {
+  render(output: RuntimeOutput): SafeHtml {
     if (!output.mimeType || !output.data) {
       // リッチ出力データがない場合は、通常のテキストとして表示
-      return output.content;
+      // ANSIエスケープシーケンスを処理
+      if (output.content) {
+        const html = this.convertAnsiToHtml(output.content);
+        return this.sanitizer.bypassSecurityTrustHtml(html);
+      }
+      return this.sanitizer.bypassSecurityTrustHtml('');
     }
 
     const mimeType = output.mimeType;
@@ -78,8 +83,12 @@ export class RichOutputRendererService {
       return this.renderPlainText(output.data['text/plain']);
     }
 
-    // それもなければ、そのまま表示
-    return output.content;
+    // それもなければ、contentをANSI処理して表示
+    if (output.content) {
+      const html = this.convertAnsiToHtml(output.content);
+      return this.sanitizer.bypassSecurityTrustHtml(html);
+    }
+    return this.sanitizer.bypassSecurityTrustHtml('');
   }
 
   /**
@@ -190,9 +199,10 @@ export class RichOutputRendererService {
   /**
    * プレーンテキストをレンダリング（JupyterLabのtext/plainレンダラーに相当）
    */
-  private renderPlainText(text: string): string {
-    // プレーンテキストはそのまま返す（HTMLエスケープはテンプレート側で処理）
-    return text;
+  private renderPlainText(text: string): SafeHtml {
+    // ANSIエスケープシーケンスを処理してHTMLに変換
+    const html = this.convertAnsiToHtml(text);
+    return this.sanitizer.bypassSecurityTrustHtml(html);
   }
 
   /**
@@ -202,6 +212,145 @@ export class RichOutputRendererService {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  /**
+   * ANSIエスケープシーケンスをHTMLに変換
+   * 
+   * 主要なANSIカラーコードをサポート:
+   * - 30-37: 前景色（黒、赤、緑、黄、青、マゼンタ、シアン、白）
+   * - 40-47: 背景色
+   * - 0: リセット
+   * - 1: 太字
+   * - 39: デフォルト前景色
+   * - 49: デフォルト背景色
+   */
+  private convertAnsiToHtml(text: string): string {
+    if (!text || typeof text !== 'string') {
+      return '';
+    }
+
+    // ANSIエスケープシーケンスの正規表現パターン
+    // \x1b[ または \u001b[ で始まり、m で終わる
+    const ansiPattern = /\u001b\[([0-9;]*?)m/g;
+
+    // ANSIカラーコードのマッピング（前景色）
+    const foregroundColors: Record<number, string> = {
+      30: '#000000', // 黒
+      31: '#ff4444', // 赤
+      32: '#44ff44', // 緑
+      33: '#ffaa00', // 黄
+      34: '#4444ff', // 青
+      35: '#ff44ff', // マゼンタ
+      36: '#44ffff', // シアン
+      37: '#ffffff', // 白
+    };
+
+    // ANSIカラーコードのマッピング（背景色）
+    const backgroundColors: Record<number, string> = {
+      40: '#000000', // 黒
+      41: '#ff4444', // 赤
+      42: '#44ff44', // 緑
+      43: '#ffaa00', // 黄
+      44: '#4444ff', // 青
+      45: '#ff44ff', // マゼンタ
+      46: '#44ffff', // シアン
+      47: '#ffffff', // 白
+    };
+
+    let html = '';
+    let lastIndex = 0;
+    let currentColor: string | null = null;
+    let currentBackground: string | null = null;
+    let isBold = false;
+    let match: RegExpExecArray | null;
+
+    // テキストをHTMLエスケープ
+    const escapedText = this.escapeHtml(text);
+
+    // ANSIエスケープシーケンスを検出して処理
+    while ((match = ansiPattern.exec(escapedText)) !== null) {
+      // エスケープシーケンスの前のテキストを追加
+      if (match.index > lastIndex) {
+        const textBefore = escapedText.substring(lastIndex, match.index);
+        if (textBefore) {
+          const styles: string[] = [];
+          if (currentColor) {
+            styles.push(`color: ${currentColor}`);
+          }
+          if (currentBackground) {
+            styles.push(`background-color: ${currentBackground}`);
+          }
+          if (isBold) {
+            styles.push('font-weight: bold');
+          }
+          if (styles.length > 0) {
+            html += `<span style="${styles.join('; ')}">${textBefore}</span>`;
+          } else {
+            html += textBefore;
+          }
+        }
+      }
+
+      // ANSIコードを解析
+      const codes = match[1] ? match[1].split(';').map(Number) : [0];
+
+      // 各コードを処理
+      for (const code of codes) {
+        if (code === 0) {
+          // リセット
+          currentColor = null;
+          currentBackground = null;
+          isBold = false;
+        } else if (code === 1) {
+          // 太字
+          isBold = true;
+        } else if (code >= 30 && code <= 37) {
+          // 前景色
+          currentColor = foregroundColors[code];
+        } else if (code === 39) {
+          // デフォルト前景色
+          currentColor = null;
+        } else if (code >= 40 && code <= 47) {
+          // 背景色
+          currentBackground = backgroundColors[code];
+        } else if (code === 49) {
+          // デフォルト背景色
+          currentBackground = null;
+        }
+      }
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // 残りのテキストを追加
+    if (lastIndex < escapedText.length) {
+      const textAfter = escapedText.substring(lastIndex);
+      if (textAfter) {
+        const styles: string[] = [];
+        if (currentColor) {
+          styles.push(`color: ${currentColor}`);
+        }
+        if (currentBackground) {
+          styles.push(`background-color: ${currentBackground}`);
+        }
+        if (isBold) {
+          styles.push('font-weight: bold');
+        }
+        if (styles.length > 0) {
+          html += `<span style="${styles.join('; ')}">${textAfter}</span>`;
+        } else {
+          html += textAfter;
+        }
+      }
+    }
+
+    // ANSIエスケープシーケンスがなかった場合は、そのまま返す
+    if (html === '') {
+      return escapedText;
+    }
+
+    return html;
   }
 }
 
